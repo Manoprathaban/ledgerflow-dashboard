@@ -6,7 +6,7 @@ CREATE TABLE accounts (
     balance NUMERIC(18, 2) NOT NULL DEFAULT 0.00,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT accounts_name_not_blank CHECK (length(trim(name)) > 0),
+    CONSTRAINT accounts_name_not_blank CHECK (name ~ '[^[:space:]]'),
     CONSTRAINT accounts_balance_non_negative CHECK (balance >= 0)
 );
 
@@ -18,14 +18,16 @@ CREATE TABLE transactions (
     description TEXT NOT NULL DEFAULT '',
     reference_id VARCHAR(200) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT transactions_reference_not_blank CHECK (length(trim(reference_id)) > 0),
-    CONSTRAINT transactions_unique_reference_per_account UNIQUE (account_id, reference_id)
+    CONSTRAINT transactions_reference_not_blank CHECK (reference_id ~ '[^[:space:]]'),
+    CONSTRAINT transactions_reference_canonical CHECK (reference_id = lower(reference_id))
 );
 
-CREATE INDEX idx_accounts_name ON accounts (name);
-CREATE INDEX idx_transactions_account_created_at ON transactions (account_id, created_at DESC);
-CREATE INDEX idx_transactions_created_at ON transactions (created_at DESC);
-CREATE INDEX idx_transactions_reference_id ON transactions (reference_id);
+CREATE INDEX idx_accounts_created_at ON accounts (created_at DESC, id DESC);
+CREATE INDEX idx_transactions_account_created_at
+    ON transactions (account_id, created_at DESC, id DESC);
+CREATE INDEX idx_transactions_created_at ON transactions (created_at DESC, id DESC);
+CREATE UNIQUE INDEX idx_transactions_unique_reference_per_account
+    ON transactions (account_id, lower(reference_id));
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -39,3 +41,16 @@ CREATE TRIGGER accounts_set_updated_at
 BEFORE UPDATE ON accounts
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
+
+CREATE OR REPLACE FUNCTION prevent_transaction_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'Transactions are immutable'
+        USING ERRCODE = '55000';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER transactions_are_immutable
+BEFORE UPDATE OR DELETE ON transactions
+FOR EACH ROW
+EXECUTE FUNCTION prevent_transaction_mutation();

@@ -18,9 +18,11 @@ This document describes the PostgreSQL schema that supports the Ledger API contr
 CREATE TABLE accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(200) NOT NULL,
-    balance NUMERIC(18, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
+    balance NUMERIC(18, 2) NOT NULL DEFAULT 0.00
+        CONSTRAINT accounts_balance_non_negative CHECK (balance >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT accounts_name_not_blank CHECK (name ~ '[^[:space:]]')
 );
 ```
 
@@ -42,34 +44,54 @@ CREATE TABLE transactions (
     description TEXT NOT NULL DEFAULT '',
     reference_id VARCHAR(200) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (account_id, reference_id)
+    CONSTRAINT transactions_reference_not_blank CHECK (reference_id ~ '[^[:space:]]'),
+    CONSTRAINT transactions_reference_canonical CHECK (reference_id = lower(reference_id))
 );
+
+CREATE UNIQUE INDEX idx_transactions_unique_reference_per_account
+    ON transactions (account_id, lower(reference_id));
+
+CREATE OR REPLACE FUNCTION prevent_transaction_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'Transactions are immutable'
+        USING ERRCODE = '55000';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER transactions_are_immutable
+BEFORE UPDATE OR DELETE ON transactions
+FOR EACH ROW
+EXECUTE FUNCTION prevent_transaction_mutation();
 ```
 
 #### Notes
 
 - `type` is restricted to `credit` or `debit`.
 - `amount` is positive because the backend contract rejects zero and negative values.
-- `reference_id` is unique within an account; the same value may appear under different accounts.
+- `reference_id` is trimmed and lower-cased by the API, unique case-insensitively within an account, and may be reused by another account.
 - `description` is stored as-is after trimming at the API layer.
-- Transactions are immutable by application design. The schema does not expose an update path.
+- `transactions_are_immutable` rejects `UPDATE` and `DELETE` on transaction rows. The application database role should not own the tables or have `TRUNCATE`/DDL privileges.
+- The unique reference index is case-insensitive and supports the per-account duplicate check. The reference canonicalization rule must be the same in API validation and SQL.
 
 ## Supporting indexes
 
 ```sql
-CREATE INDEX idx_accounts_name ON accounts (name);
+CREATE INDEX idx_accounts_created_at
+    ON accounts (created_at DESC, id DESC);
 CREATE INDEX idx_transactions_account_created_at
-    ON transactions (account_id, created_at DESC);
-CREATE INDEX idx_transactions_created_at ON transactions (created_at DESC);
-CREATE INDEX idx_transactions_reference_id ON transactions (reference_id);
+    ON transactions (account_id, created_at DESC, id DESC);
+CREATE INDEX idx_transactions_created_at
+    ON transactions (created_at DESC, id DESC);
 ```
 
 #### Why these indexes matter
 
-- account_name lookup in list/search endpoints is fast
-- by-account transaction history is sorted by newest-first
-- global transaction list supports filtering and ordering efficiently
-- reference lookups are available for duplicate detection and validation
+- account list and by-account transaction history use the API's deterministic newest-first order
+- global transaction list supports date ordering and deterministic ties
+- the unique reference index enforces duplicate prevention within each account
+
+The account-name and transaction-description searches are substring searches in the frontend contract. These B-tree indexes do not accelerate arbitrary `%term%` matching; begin without a specialized search index and add `pg_trgm` only if measured query performance requires it.
 
 ## Balance integrity rules
 
@@ -87,7 +109,7 @@ Example pseudocode:
 ```sql
 BEGIN;
 SELECT balance FROM accounts WHERE id = $1 FOR UPDATE;
--- validate debit / credit rules
+-- Validate the debit against the locked, current balance.
 INSERT INTO transactions (...)
 VALUES (...);
 UPDATE accounts
@@ -97,7 +119,11 @@ WHERE id = $1;
 COMMIT;
 ```
 
-This ensures that a transaction cannot be committed without the corresponding balance adjustment.
+Every transaction writer must lock the account row before reading its balance. The lock serializes concurrent debits for that account: a waiting debit reads the balance after the earlier transaction commits and is rejected if funds are no longer sufficient. Insert the transaction before updating the cached balance; if the insert violates the unique reference index, the transaction aborts before the balance changes. If the balance update or any later operation fails, the database transaction rolls back both writes.
+
+The `accounts.balance` column is a cached projection. PostgreSQL's row-local checks can enforce non-negative values but cannot, by themselves, enforce equality to an aggregate over `transactions`. That cross-table invariant depends on all writes following this one repository/service transaction protocol. Do not claim that a `CHECK` constraint validates the aggregate balance.
+
+`transactions_are_immutable` rejects row updates and deletes. The application role must also lack table ownership, `TRUNCATE`, and DDL privileges; database owners and superusers can otherwise bypass application-level protections.
 
 ## Backend contract alignment
 
@@ -106,10 +132,12 @@ The schema should align directly with the following payloads:
 - `AccountResponse`: `id`, `name`, `balance`, `created_at`
 - `TransactionResponse`: `id`, `account_id`, `type`, `amount`, `description`, `reference_id`, `created_at`
 - list responses: `items`, `page`, `page_size`, `total`, `total_pages`
+- `GET /api/v1/transactions` rows may include the joined `account_name` display field
+
+The executable bootstrap DDL is [schema.sql](../sql/schema.sql). Keep this design document synchronized with it; the current [indexes.sql](../sql/indexes.sql) is a placeholder, not an additional migration.
 
 ## Future considerations
 
-- Add a `version` or `updated_at` audit trail if row-level concurrency becomes important.
 - If multi-currency support is introduced later, replace the single `balance`/`amount` currency assumptions with explicit `currency_code` fields.
 - If there is a need for soft-delete or reversal support, add an explicit ledger state field rather than mutating historical rows.
 

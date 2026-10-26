@@ -49,6 +49,8 @@ interface PagedResponse<T> {
 }
 ```
 
+For an empty result set, `total` and `total_pages` are `0`, while `page` remains `1`.
+
 ## API client contract mapping
 
 ### Account endpoints
@@ -58,7 +60,7 @@ interface PagedResponse<T> {
   - Success: `201` with `AccountResponse`
 
 - `GET /api/v1/accounts`
-  - Query: `search`, `page`, `page_size`
+  - Query: `search`, `page`, `page_size` (`1`-`100`)
   - Success: `PagedResponse<AccountResponse>`
 
 - `GET /api/v1/accounts/{account_id}`
@@ -74,16 +76,19 @@ interface PagedResponse<T> {
   - Success: `201` with `TransactionResponse`
 
 - `GET /api/v1/accounts/{account_id}/transactions`
-  - Query: `type`, `search`, `start_date`, `end_date`, `page`, `page_size`
+  - Query: `type`, `search`, `start_date`, `end_date`, `page`, `page_size` (`1`-`100`)
   - Success: `PagedResponse<TransactionResponse>`
 
 - `GET /api/v1/transactions`
-  - Query: `search`, `type`, `account_id`, `start_date`, `end_date`, `page`, `page_size`
-  - Success: `PagedResponse<TransactionResponse | TransactionRow>`
+  - Query: `search`, `type`, `account_id`, `start_date`, `end_date`, `page`, `page_size` (`1`-`100`)
+  - Success: `PagedResponse<TransactionRow>`
+
+- `GET /api/v1/transactions/{transaction_id}`
+  - Success: `TransactionResponse`
 
 ### Transaction row shape for global list
 
-For the cross-account transaction list, the API may include the joined account name to avoid an extra lookup in the UI:
+The cross-account transaction list includes the joined account name to avoid an extra lookup in the UI:
 
 ```ts
 interface TransactionRow extends TransactionResponse {
@@ -104,7 +109,9 @@ type LedgerState = {
 };
 ```
 
-If a cross-account transaction list includes `account_name`, use a derived view model:
+The backend does not return an entire ledger snapshot. Keep paginated API results as query data rather than treating one page as the complete `LedgerState`; refresh affected account and transaction queries after mutations.
+
+Use a derived view model for global transaction list rows:
 
 ```ts
 type TransactionRow = TransactionResponse & {
@@ -120,17 +127,7 @@ The frontend must not rely on floating-point arithmetic for ledger operations. I
 - convert to minor units only inside the app when arithmetic is required
 - format back for display as INR with 2 decimal places
 
-Example utilities:
-
-```ts
-const parseAmountToPaise = (value: string): number | null => {
-  // decimal-safe conversion logic
-};
-
-const paiseToAmount = (value: number): string => (value / 100).toFixed(2);
-```
-
-This matches the project utility pattern already used in the frontend codebase and ensures exact arithmetic for balance updates.
+The current frontend money helper returns JavaScript `number` paise. That is not exact for all amounts accepted by `NUMERIC(18, 2)`, because a 16-digit rupee amount can exceed `Number.MAX_SAFE_INTEGER` when represented in paise. Before API integration, use `bigint` minor units or lower the shared maximum amount/balance so every possible paise value is a safe integer. Formatting must not convert an out-of-range `bigint` back to `number`.
 
 ## Validation behavior expected by the UI
 
@@ -149,7 +146,7 @@ Fields and validation:
 - `type`: `credit` or `debit`
 - `amount`: positive decimal string, max 2 decimal places
 - `description`: optional, trimmed
-- `reference_id`: required, trimmed, unique per account
+- `reference_id`: required, trimmed, case-folded, unique case-insensitively per account
 - debit validation should compare the requested amount against the current balance before submitting
 
 ### API error handling
@@ -161,20 +158,25 @@ interface ApiErrorShape {
   error: {
     code: string;
     message: string;
-    details?: Record<string, string>;
+    details?: Array<{
+      field: string;
+      issue: string;
+    }>;
   };
 }
 ```
 
-Examples:
+Backend error codes:
 
-- `INVALID_AMOUNT`
+- `VALIDATION_ERROR`
+- `ACCOUNT_NOT_FOUND`
+- `TRANSACTION_NOT_FOUND`
 - `DUPLICATE_REFERENCE`
 - `INSUFFICIENT_BALANCE`
-- `ACCOUNT_NOT_FOUND`
-- `VALIDATION_ERROR`
+- `BALANCE_LIMIT_EXCEEDED`
+- `INTERNAL_ERROR`
 
-Display the backend `message` in toasts or inline validation. For field-level failures, prefer mapping `error.details.field` into the form state.
+Expected status mappings are `404` for missing resources, `409` for duplicate references or insufficient balance, `422` for invalid input/UUID/query parameters, and `500` for unexpected server errors. Display the backend `message` in toasts or inline validation. Map each `details` entry's `field` to form state. The API must translate FastAPI's default validation response into this envelope.
 
 ## UI mapping to backend resources
 
@@ -205,6 +207,12 @@ Use:
 - filter by `type`, `account_id`, search, and date range
 - keep sorting defaulted to newest first
 
+The current API list response is paginated, so totals for the full filtered result cannot be derived from the current page. The original assessment requires transaction count, credit total, and debit total. Before integration, decide whether these cards represent all ledger records or the active filters and define an aggregate payload or endpoint accordingly.
+
+The existing frontend transactions route also does not currently render those required summary cards. This remains an assessment-coverage gap; it is recorded here for the frontend implementation phase and is not changed as part of the backend design review.
+
+Other transaction-page acceptance gaps in the current frontend: page size is fixed rather than configurable, and the synchronous mock route does not expose loading/error states. The transaction form shows a live balance preview but submits directly; it does not provide the required pre-submit confirmation dialog/summary containing account holder, type, amount, current balance, and resulting balance. Address these before treating the assessment UI as complete.
+
 ### Transaction creation modal/form
 
 Use:
@@ -223,6 +231,8 @@ When the backend is connected, refresh relevant queries after mutations:
 - keep server responses authoritative for totals and balances
 
 Avoid storing derived totals like `balance` or `total credits` in separate mutable client state unless they are recomputed immediately from the API response.
+
+The currently implemented frontend still uses the browser-persisted mock services. No HTTP API client or live FastAPI integration exists yet; this document describes the future integration contract.
 
 ## UX rules derived from payloads
 
@@ -262,7 +272,7 @@ export interface AccountListResponse {
 }
 
 export interface TransactionListResponse {
-  items: Transaction[];
+  items: (Transaction & { account_name: string })[];
   page: number;
   page_size: number;
   total: number;

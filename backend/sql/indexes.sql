@@ -1,7 +1,5 @@
--- Placeholder index file for the Ledger backend.
--- Add database indexes after the schema and query patterns are finalized.
+-- The initial indexes are defined in schema.sql alongside their tables.
+-- This file intentionally has no additional executable statements.
 --
--- Intended index areas:
--- - account lookup by holder_name or account identifier
--- - transaction history lookups by account_id and created_at
--- - search and filtering queries for reference_id and description
+-- Revisit query-specific indexes only after measuring real query plans. In
+-- particular, B-tree indexes do not accelerate arbitrary substring searches.
