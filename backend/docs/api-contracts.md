@@ -354,4 +354,4 @@ There is no global `POST /api/v1/transactions` endpoint. Creation is account-sco
 
 ## Implementation status
 
-This is the target contract, not a description of completed backend behavior. Current FastAPI routes are placeholders and do not yet implement these payloads, error mappings, database operations, or concurrency guarantees. See [the backend README](../README.md) for the current implementation and test status.
+Account creation, retrieval, balance reads, paginated account search, transaction creation, transaction detail, and filtered transaction histories currently implement this contract with PostgreSQL persistence and the documented error envelopes. Transaction creation locks the account and atomically writes the immutable ledger entry and new balance. See [the backend README](../README.md) for current implementation and test status.

@@ -1,51 +1,91 @@
-from fastapi import APIRouter
+from datetime import date
+from typing import Annotated, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query, status
+
+from app.dependencies import get_account_service, get_transaction_service
+from app.schemas.account import (
+    AccountBalanceResponse,
+    AccountCreateRequest,
+    AccountListResponse,
+    AccountResponse,
+)
+from app.schemas.transaction import (
+    TransactionCreateRequest,
+    TransactionListResponse,
+    TransactionResponse,
+)
+from app.services.account_service import AccountService
+from app.services.transaction_service import TransactionService
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
-@router.get("")
-async def list_accounts():
-    """List accounts.
-
-    This is a placeholder route for the foundation stage. Detailed query logic and
-    response schemas will be implemented in the next step.
-    """
-    return {"items": [], "count": 0}
-
-
-@router.get("/{account_id}")
-async def get_account(account_id: str):
-    """Fetch a single account."""
-    return {"account_id": account_id}
+@router.get("", response_model=AccountListResponse)
+def list_accounts(
+    service: Annotated[AccountService, Depends(get_account_service)],
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, object]:
+    return service.list_accounts(search=search, page=page, page_size=page_size)
 
 
-@router.get("/{account_id}/balance")
-async def get_account_balance(account_id: str):
-    """Fetch the current account balance."""
-    return {"account_id": account_id, "balance": "0.00"}
+@router.get("/{account_id}", response_model=AccountResponse)
+def get_account(
+    account_id: UUID,
+    service: Annotated[AccountService, Depends(get_account_service)],
+) -> dict[str, object]:
+    return service.get_account(account_id)
 
 
-@router.get("/{account_id}/transactions")
-async def get_account_transactions(account_id: str):
-    """Fetch transaction history for a single account."""
-    return {"account_id": account_id, "items": [], "count": 0}
+@router.get("/{account_id}/balance", response_model=AccountBalanceResponse)
+def get_account_balance(
+    account_id: UUID,
+    service: Annotated[AccountService, Depends(get_account_service)],
+) -> dict[str, object]:
+    return service.get_balance(account_id)
 
 
-@router.post("/{account_id}/transactions")
-async def create_account_transaction(account_id: str):
-    """Create a transaction for a single account.
+@router.get("/{account_id}/transactions", response_model=TransactionListResponse)
+def list_account_transactions(
+    account_id: UUID,
+    service: Annotated[TransactionService, Depends(get_transaction_service)],
+    transaction_type: Annotated[Literal["all", "credit", "debit"], Query(alias="type")] = "all",
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, object]:
+    return service.list_transactions(
+        account_id=account_id,
+        transaction_type=transaction_type,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        page_size=page_size,
+    )
 
-    Placeholder only; actual balance validation and repository-backed SQL will be
-    implemented in the next step.
-    """
-    return {"account_id": account_id, "message": "Not implemented yet"}
+
+@router.post(
+    "/{account_id}/transactions",
+    response_model=TransactionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_account_transaction(
+    account_id: UUID,
+    request: TransactionCreateRequest,
+    service: Annotated[TransactionService, Depends(get_transaction_service)],
+) -> dict[str, object]:
+    return service.create_transaction(account_id, request)
 
 
-@router.post("")
-async def create_account():
-    """Create an account.
-
-    This endpoint will be implemented with validation and repository-backed SQL
-    once the schema and contract are finalized.
-    """
-    return {"message": "Not implemented yet"}
+@router.post("", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+def create_account(
+    request: AccountCreateRequest,
+    service: Annotated[AccountService, Depends(get_account_service)],
+) -> dict[str, object]:
+    return service.create_account(request.name)

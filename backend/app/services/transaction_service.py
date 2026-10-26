@@ -1,16 +1,78 @@
-"""Service layer for transaction workflows.
-
-The implementation is intentionally minimal at this foundation stage.
-"""
-
 from __future__ import annotations
 
-from app.repositories.transaction_repository import TransactionRepository
+from datetime import date
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from app.core.exceptions import InvalidDateRangeError, TransactionNotFoundError
+from app.repositories.transaction_repository import (
+    TransactionRepository,
+    TransactionTypeFilter,
+)
+from app.schemas.transaction import TransactionCreateRequest
 
 
 class TransactionService:
     def __init__(self, repository: TransactionRepository | None = None) -> None:
         self.repository = repository or TransactionRepository()
 
-    def list_transactions(self):
-        return self.repository.list_transactions()
+    def create_transaction(
+        self, account_id: UUID, request: TransactionCreateRequest
+    ) -> dict[str, Any]:
+        transaction = self.repository.create_transaction(account_id, request)
+        return self._format_transaction(transaction)
+
+    def get_transaction(self, transaction_id: UUID) -> dict[str, Any]:
+        transaction = self.repository.get_transaction(transaction_id)
+        if transaction is None:
+            raise TransactionNotFoundError(transaction_id)
+        return self._format_transaction(transaction)
+
+    def list_transactions(
+        self,
+        *,
+        account_id: UUID | None = None,
+        search: str | None = None,
+        transaction_type: TransactionTypeFilter = "all",
+        start_date: date | None = None,
+        end_date: date | None = None,
+        page: int = 1,
+        page_size: int = 10,
+        include_account_name: bool = False,
+    ) -> dict[str, Any]:
+        if start_date is not None and end_date is not None and start_date > end_date:
+            raise InvalidDateRangeError()
+        transactions, total = self.repository.list_transactions(
+            account_id=account_id,
+            search=search,
+            transaction_type=transaction_type,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            page_size=page_size,
+            include_account_name=include_account_name,
+        )
+        return {
+            "items": [
+                self._format_transaction(transaction, include_account_name)
+                for transaction in transactions
+            ],
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size,
+        }
+
+    @staticmethod
+    def _format_transaction(
+        transaction: dict[str, Any], include_account_name: bool = False
+    ) -> dict[str, Any]:
+        formatted = {
+            **transaction,
+            "amount": f"{Decimal(transaction['amount']):.2f}",
+        }
+        if include_account_name:
+            return formatted
+        formatted.pop("account_name", None)
+        return formatted
