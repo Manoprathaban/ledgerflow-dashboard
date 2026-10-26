@@ -104,12 +104,12 @@ jobs:
           psql -h localhost -U ledger -d ledger \
             -v ON_ERROR_STOP=1 \
             -f backend/tests/sql/verify_schema.sql
-      - name: Check Supabase RLS is enabled
+      - name: Check Supabase RLS and backend-only policies
         env:
           PGPASSWORD: ledger
         run: |
           psql -h localhost -U ledger -d ledger -v ON_ERROR_STOP=1 -c \
-            "SELECT 1 / CASE WHEN bool_and(relrowsecurity) THEN 1 ELSE 0 END FROM pg_class WHERE oid IN ('public.accounts'::regclass, 'public.transactions'::regclass)"
+            "SELECT 1 / CASE WHEN bool_and(relrowsecurity) AND (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('accounts', 'transactions') AND policyname IN ('accounts_backend_access', 'accounts_backend_only', 'transactions_backend_access', 'transactions_backend_only')) = 4 THEN 1 ELSE 0 END FROM pg_class WHERE oid IN ('public.accounts'::regclass, 'public.transactions'::regclass)"
 
   deploy_database:
     name: Apply Supabase migrations

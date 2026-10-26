@@ -54,6 +54,21 @@ BEGIN
     EXCEPTION WHEN check_violation THEN
         NULL;
     END;
+
+    IF (
+        SELECT COUNT(*)
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename IN ('accounts', 'transactions')
+          AND policyname IN (
+              'accounts_backend_access',
+              'accounts_backend_only',
+              'transactions_backend_access',
+              'transactions_backend_only'
+          )
+    ) != 4 THEN
+        RAISE EXCEPTION 'Expected backend-only RLS policies on both ledger tables';
+    END IF;
 END;
 $$;
 

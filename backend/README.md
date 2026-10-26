@@ -41,7 +41,7 @@ cp .env.example .env
 
 ## Supabase database migrations
 
-The deployment migration is [`../supabase/migrations/20261026134000_create_ledger_tables.sql`](../supabase/migrations/20261026134000_create_ledger_tables.sql). It creates the account and transaction tables, constraints, indexes, timestamp/immutability triggers, and enables row-level security without public client policies. The app must use a trusted server-side database credential; never put database credentials or a Supabase service-role key in the frontend.
+The deployment migrations in [`../supabase/migrations/`](../supabase/migrations/) create the account and transaction tables, constraints, indexes, timestamp/immutability triggers, and backend-only row-level security policies. The app must use a trusted server-side database credential; never put database credentials or a Supabase service-role key in the frontend.
 
 After confirming the intended Supabase project and environment, install the Supabase CLI, authenticate, link the project, inspect pending migrations, and apply them:
 

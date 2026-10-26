@@ -83,7 +83,7 @@ ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 - `description` is stored as-is after trimming at the API layer.
 - Immutability triggers reject `UPDATE`, `DELETE`, and `TRUNCATE` on transaction rows. The application database role should not own the tables or have DDL privileges.
 - The unique reference index is case-insensitive and supports the per-account duplicate check. The reference canonicalization rule must be the same in API validation and SQL.
-- Row-level security is enabled without client-facing policies. Supabase `anon` and `authenticated` roles cannot access rows through the Data API; a trusted, server-only backend database credential is required.
+- Row-level security uses backend-only policies. They allow the trusted `postgres` and `service_role` database roles while blocking Supabase `anon` and `authenticated` roles. Never expose privileged credentials to browser code.
 
 ## Supporting indexes
 
