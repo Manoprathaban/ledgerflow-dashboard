@@ -81,23 +81,23 @@ export function TransactionForm({
     const nextErrors: Record<string, string> = {};
 
     if (!form.accountId) {
-      nextErrors.accountId = "Select an account.";
+      nextErrors["accountId"] = "Select an account.";
     } else if (!accounts.some((item) => item.id === form.accountId)) {
-      nextErrors.accountId = "The selected account does not exist.";
+      nextErrors["accountId"] = "The selected account does not exist.";
     }
 
     const parsedAmount = parseAmountToPaise(form.amount);
     if (parsedAmount === null || parsedAmount <= 0) {
-      nextErrors.amount = "Amount must be a valid positive value with up to two decimal places.";
+      nextErrors["amount"] = "Amount must be a valid positive value with up to two decimal places.";
     }
 
     const trimmedReference = form.referenceId.trim();
     if (!trimmedReference) {
-      nextErrors.referenceId = "Reference ID is required.";
+      nextErrors["referenceId"] = "Reference ID is required.";
     }
 
     if (form.type === "debit" && parsedAmount !== null && parsedAmount > balancePaise) {
-      nextErrors.amount = "Debit exceeds the available account balance.";
+      nextErrors["amount"] = "Debit exceeds the available account balance.";
     }
 
     const duplicate = transactions.some(
@@ -106,7 +106,8 @@ export function TransactionForm({
         tx.reference_id.toLowerCase() === trimmedReference.toLowerCase(),
     );
     if (trimmedReference && duplicate) {
-      nextErrors.referenceId = "A transaction with this reference already exists on this account.";
+      nextErrors["referenceId"] =
+        "A transaction with this reference already exists on this account.";
     }
 
     return nextErrors;
@@ -173,7 +174,9 @@ export function TransactionForm({
               ))}
             </SelectContent>
           </Select>
-          {errors.accountId ? <p className="text-sm text-destructive">{errors.accountId}</p> : null}
+          {errors["accountId"] ? (
+            <p className="text-sm text-destructive">{errors["accountId"]}</p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -202,7 +205,7 @@ export function TransactionForm({
             onChange={(event) => updateField("amount", event.target.value)}
             placeholder="1500.00"
           />
-          {errors.amount ? <p className="text-sm text-destructive">{errors.amount}</p> : null}
+          {errors["amount"] ? <p className="text-sm text-destructive">{errors["amount"]}</p> : null}
         </div>
 
         <div className="space-y-2 md:col-span-2">
@@ -227,8 +230,8 @@ export function TransactionForm({
             onChange={(event) => updateField("referenceId", event.target.value)}
             placeholder="INV-1024"
           />
-          {errors.referenceId ? (
-            <p className="text-sm text-destructive">{errors.referenceId}</p>
+          {errors["referenceId"] ? (
+            <p className="text-sm text-destructive">{errors["referenceId"]}</p>
           ) : null}
         </div>
       </div>
@@ -269,7 +272,7 @@ export function TransactionForm({
         </div>
       ) : null}
 
-      {errors.form ? <p className="text-sm text-destructive">{errors.form}</p> : null}
+      {errors["form"] ? <p className="text-sm text-destructive">{errors["form"]}</p> : null}
 
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel ? (

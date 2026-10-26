@@ -9,6 +9,8 @@
 /frontend/.vinxi/
 /frontend/.nitro/
 /frontend/.wrangler/
+/frontend/.vercel/
+/supabase/.temp/
 /output/
 /.output/
 /.vinxi/

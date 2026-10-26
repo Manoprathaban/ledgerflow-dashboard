@@ -43,7 +43,19 @@ npm run build
 cd frontend
 npm run lint
 npm test
+npx tsc --noEmit
+npm run build
+cd ../backend
+pip install -r requirements-dev.txt
+ruff check .
+ruff format --check .
+mypy
+pytest -q
 ```
+
+## CI/CD
+
+GitHub Actions runs frontend checks, backend Ruff/mypy/pytest, and migration validation against PostgreSQL 17 on pull requests and pushes to `main`. Production database migrations are gated by the `production` GitHub environment and are opt-in until its credentials and variables are configured. Render and Vercel jobs are similarly disabled until explicitly enabled and the backend/frontend are ready for deployment. See [backend deployment configuration](./backend/README.md#cicd-and-deployment-status) before configuring repository settings or secrets.
 
 ## Current behavior
 

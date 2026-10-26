@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { TransactionForm } from "@/components/ledger/TransactionForm";

@@ -3,7 +3,9 @@ import type { Transaction, TransactionType } from "@/types/transaction";
 import { parseAmountToPaise, paiseToAmount } from "@/utils/money";
 
 /** Fictional seed accounts. Balances are derived from the seed transactions below. */
-const SEED_ACCOUNTS: Array<Pick<Account, "id" | "name"> & { created_at: string }> = [
+type SeedAccount = Pick<Account, "id" | "name"> & { created_at: string };
+
+const SEED_ACCOUNTS: [SeedAccount, SeedAccount, SeedAccount, SeedAccount, SeedAccount] = [
   {
     id: "7a1e9c2e-4b6f-4d3a-9c81-2f6a1d9e5b01",
     name: "Arjun Mehta",
@@ -40,7 +42,10 @@ interface SeedTx {
   created_at: string;
 }
 
-const [ARJUN, PRIYA, RAHUL, NEHA] = SEED_ACCOUNTS.map((a) => a.id);
+const ARJUN = SEED_ACCOUNTS[0].id;
+const PRIYA = SEED_ACCOUNTS[1].id;
+const RAHUL = SEED_ACCOUNTS[2].id;
+const NEHA = SEED_ACCOUNTS[3].id;
 
 /** At least fifteen transactions, credits and debits, spread across several days. */
 const SEED_TRANSACTIONS: SeedTx[] = [
