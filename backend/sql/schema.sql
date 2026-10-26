@@ -1,0 +1,14 @@
+-- Placeholder schema file for the Ledger backend.
+-- This file will be finalized in the next implementation step once the API contract
+-- and database model are approved.
+--
+-- Planned concepts:
+-- - accounts table
+-- - transactions table
+-- - UUID primary keys
+-- - NUMERIC(18,2) monetary values
+-- - TIMESTAMPTZ timestamps
+-- - foreign key from transactions.account_id -> accounts.id
+-- - unique constraint on (account_id, reference_id)
+-- - transaction type check constraint
+-- - non-negative / positive amount validation

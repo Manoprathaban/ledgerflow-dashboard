@@ -1,223 +1,68 @@
-# LedgerFlow Dashboard
+# Ledger
 
-# Build a Transaction Ledger Management Dashboard
+Ledger is a responsive transaction ledger dashboard for managing accounts, balances, and cash-flow activity. The project is currently frontend-only and uses mock ledger data to simulate realistic banking behavior.
 
-## 1. Project Overview
+## Repository layout
 
-Build a professional, modern, responsive web application for a **Transaction Ledger System**. The application allows users to view bank-style account information, create accounts, perform credit and debit transactions, view account balances, and inspect transaction history.
+- `frontend/` — the React + Vite + TanStack application
+- `README.md` — project setup and usage notes
+- `.gitignore` — repository-level ignore rules
 
-This is a frontend-only implementation at this stage.
+## Frontend stack
 
-**Important technical constraints:**
-- Do not build a backend.
-- Do not connect Supabase, Firebase, or any external database.
-- Do not create server-side functions or API endpoints.
-- Do not integrate any real payment gateway or banking service.
-- Use realistic mock data for demonstration.
-- Keep all data operations in a dedicated mock service layer so it can later be replaced with API calls to a FastAPI backend.
-- Do not introduce unnecessary dependencies or overengineered frontend architecture.
+- React 19
+- Vite
+- TanStack Router / Start
+- Tailwind CSS
+- Vitest
+- ESLint / Prettier
 
-The eventual backend will use FastAPI, PostgreSQL, and raw SQL through Psycopg, organized as a layered monolithic service. Design the frontend contracts with this future backend integration in mind.
+## Prerequisites
 
-## 2. Design Direction
+- Node.js 18+
+- npm
 
-Create a premium financial SaaS dashboard with a clean, minimal, professional appearance.
+## Local development
 
-### Visual style
-- Use a white and light-gray interface.
-- Use dark navy or charcoal for primary text.
-- Use blue as the primary action color.
-- Use green for credit transactions and positive balance indicators.
-- Use red for debit transactions and destructive or rejected operations.
-- Use subtle gray borders and restrained shadows.
-- Use rounded cards and inputs with consistent spacing.
-- Use clear typography and strong information hierarchy.
-- Avoid excessive gradients, glassmorphism, oversized illustrations, and decorative animations.
-- Use icons consistently and sparingly.
-- Ensure adequate contrast and accessible form labels.
+```sh
+cd frontend
+npm install
+npm run dev
+```
 
-The dashboard should look suitable for a real financial software product, not a generic landing page or a marketing website.
+## Production build
 
-## 3. Application Layout
+```sh
+cd frontend
+npm run build
+```
 
-Create a desktop-first dashboard that also works well on tablets and mobile devices.
+## Linting and tests
 
-### Sidebar navigation
+```sh
+cd frontend
+npm run lint
+npm test
+```
 
-Add a fixed or collapsible left sidebar containing:
+## Current behavior
 
-- Product logo and name: **Ledger**
-- Dashboard
-- Accounts
-- Transactions
-- Settings
+The app includes:
 
-Highlight the active navigation item.
+- Dashboard summaries and recent activity
+- Account creation and account detail views
+- Credit and debit transactions
+- Validation for duplicate references and insufficient funds
+- Search, filters, sorting, and pagination
+- Mock data persistence in browser storage for demo purposes
 
-At the bottom, show a small profile section with a generic avatar and the label "Administrator".
+This is a frontend implementation intended to be replaced by a backend API later without changing the UI contract.
 
-Navigation must work. Each menu item should open its corresponding page or section.
+## Notes
 
-### Top navigation bar
-
-Include:
-- Current page title and breadcrumb.
-- A global search field for accounts and transactions.
-- A notification icon with a small visual indicator.
-- A profile menu with a Settings option.
-
-Keep the top navigation clean and compact.
-
-## 4. Dashboard Page
-
-Make the Dashboard the default landing page.
-
-### Summary cards
-
-Display four KPI cards:
-
-1. **Total Accounts** — number of accounts created.
-2. **Total Ledger Balance** — sum of the current balances of all accounts.
-3. **Total Credits** — sum of successful credit transactions.
-4. **Total Debits** — sum of successful debit transactions.
-
-Each card should contain:
-- A clear title.
-- A prominent numeric value.
-- A relevant icon.
-- A subtle supporting label.
-
-All values must be calculated from the mock dataset rather than hardcoded independently.
-
-Format monetary values consistently in INR (₹), with two decimal places where appropriate.
-
-### Recent transactions
-
-Display a recent transactions table with the latest records first.
-
-Columns:
-- Transaction ID
-- Account
-- Type
-- Amount
-- Reference ID
-- Date and Time
-- Status
-
-Use green styling for credits and red styling for debits.
-
-Display transaction types using compact badges.
-
-Use a clear empty state if there are no transactions.
-
-Add a "View All Transactions" action that navigates to the Transactions page.
-
-### Account overview
-
-Display a compact account table or list showing:
-- Account holder name
-- Account ID
-- Current balance
-- Account creation date
-
-Provide a "View All Accounts" action and a prominent "Create Account" button.
-
-## 5. Accounts Page
-
-Build a dedicated account management page.
-
-### Account listing
-
-Display a searchable and paginated table with these columns:
-
-- Account ID
-- Account Holder
-- Current Balance
-- Created At
-- Actions
-
-Features:
-- Search by account holder name or account ID.
-- Pagination with configurable page size.
-- Clear display of account balances.
-- A "View Details" action for each account.
-- A prominent "Create Account" button.
-
-### Create Account modal
-
-When the user clicks "Create Account", open a modal containing:
-
-- Account Holder Name — required text field.
-- Initial Balance — display a disabled field showing ₹0.00.
-
-The initial balance must always be zero. Do not let the user change it.
-
-Add:
-- Cancel button.
-- Create Account button.
-- Inline validation for a missing or whitespace-only name.
-- Loading state while submitting.
-- Success and error feedback.
-
-When an account is created successfully in the mock implementation:
-- Generate a unique mock account ID.
-- Generate the creation timestamp.
-- Set the balance to zero.
-- Add the account to the account listing.
-- Update dashboard statistics.
-- Show a success toast.
-- Close the modal.
-
-The generated account ID, balance, and timestamp must come from the mock service, not user-editable form fields.
-
-## 6. Account Details Page
-
-Clicking an account should open its details page.
-
-Display:
-- Account holder name.
-- Account ID.
-- Current balance.
-- Account creation date.
-- Account transaction count.
-
-Provide two prominent actions:
-- Add Credit
-- Add Debit
-
-Below the account summary, show the transaction history for that account.
-
-Transaction history columns:
-- Transaction ID
-- Type
-- Amount
-- Description
-- Reference ID
-- Created At
-
-Support:
-- Credit/debit filtering.
-- Latest-first sorting.
-- Pagination.
-- An empty state when the account has no transactions.
-
-The account balance must update automatically when a valid mock transaction is successfully processed.
-
-## 7. Add Transaction Workflow
-
-Create a reusable transaction modal that supports both credit and debit operations.
-
-### Form fields
-
-- Account ID — prefilled and read-only when launched from an account details page.
-- Transaction Type — Credit or Debit.
-- Amount — positive monetary amount.
-- Description — text field or textarea.
-- Reference ID — required text field.
-
-### Validation
-
-- Account must exist.
+- The project uses mock data only; no backend or database is implemented.
+- The design is intentionally kept as a professional financial SaaS dashboard.
+- The app name and browser metadata are branded as Ledger.
 - Amount must be greater than zero.
 - Reject invalid or malformed amounts.
 - Description must be trimmed.
@@ -491,23 +336,14 @@ The frontend is complete when:
 
 Build the complete, working frontend rather than just a static dashboard mockup. Prioritize correct ledger behavior, reusable components, clean TypeScript, and a professional financial SaaS interface.
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/bab8bfd7-a81c-4663-83f7-347ff2f26f8e).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
 git clone <this-repository-url>
 cd <repository-name>
+cd frontend
 npm i
 npm run dev
 ```

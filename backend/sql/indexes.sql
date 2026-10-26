@@ -1,0 +1,7 @@
+-- Placeholder index file for the Ledger backend.
+-- Add database indexes after the schema and query patterns are finalized.
+--
+-- Intended index areas:
+-- - account lookup by holder_name or account identifier
+-- - transaction history lookups by account_id and created_at
+-- - search and filtering queries for reference_id and description
