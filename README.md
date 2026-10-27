@@ -90,3 +90,5 @@ The API validates Supabase access tokens when `SUPABASE_URL` and
 `SUPABASE_ANON_KEY` are configured on the backend. Protected API endpoints
 return an error if authentication is missing or unavailable. Never expose
 database credentials or a privileged database role to the browser.
+
+Application link:https://frontend-rho-swart-9gkfcypwxz.vercel.app/login
