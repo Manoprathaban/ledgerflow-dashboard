@@ -1,6 +1,6 @@
 # Ledger
 
-Ledger is a responsive transaction ledger dashboard for managing accounts, balances, and cash-flow activity. The project is currently frontend-only and uses mock ledger data to simulate realistic banking behavior.
+Ledger is a responsive transaction ledger dashboard for managing accounts, balances, and cash-flow activity. The frontend connects to the independently deployed Render API and uses Supabase email/password authentication to gate dashboard routes.
 
 ## Repository layout
 
@@ -37,6 +37,26 @@ cd frontend
 npm run build
 ```
 
+## Supabase authentication and Vercel deployment
+
+The frontend supports Supabase email/password sign-up and sign-in. Configure the
+Supabase project URL and publishable (or legacy anon) key as
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; these are public browser values,
+not service-role credentials. Use the same values in `frontend/.env` for local
+development or as Vercel project environment variables.
+
+To deploy the frontend, create a Vercel project with `frontend/` as its root
+directory, `npm ci` as the install command, and `npm run build:vercel` as the
+build command. The Vercel Nitro preset emits the server and static output for the
+deployment. Add the deployed site URL (and any preview URLs where email
+confirmation should work) to Supabase Authentication's URL configuration.
+Keep `VITE_API_BASE_URL` pointed at the existing Render API.
+
+Frontend login gates dashboard pages, but the Render API itself remains
+unauthenticated and ledger records are shared. Do not treat this frontend gate
+as API access control or use it for sensitive data until API authentication is
+implemented separately.
+
 ## Linting and tests
 
 ```sh
@@ -66,13 +86,13 @@ The app includes:
 - Credit and debit transactions
 - Validation for duplicate references and insufficient funds
 - Search, filters, sorting, and pagination
-- Mock data persistence in browser storage for demo purposes
+- Ledger data loaded from the connected Render API
 
-This is a frontend implementation intended to be replaced by a backend API later without changing the UI contract.
+Ledger records are loaded from the Render API; browser storage is used for local display preferences.
 
 ## Notes
 
-- The project uses mock data only; no backend or database is implemented.
+- Supabase authentication is currently enforced by the frontend only; the Render API remains unauthenticated.
 - The design is intentionally kept as a professional financial SaaS dashboard.
 - The app name and browser metadata are branded as Ledger.
 - Amount must be greater than zero.

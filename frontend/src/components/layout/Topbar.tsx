@@ -1,5 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Bell, ChevronRight, Menu, Settings as SettingsIcon } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Menu, Settings as SettingsIcon } from "lucide-react";
+import { useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useLedger } from "@/hooks/useLedger";
+import { useAuth } from "@/hooks/useAuth";
 import { formatINR } from "@/utils/money";
 import { GlobalSearch } from "./GlobalSearch";
 import { SidebarNav } from "./AppSidebar";
@@ -38,11 +40,24 @@ function pageTitle(pathname: string): string {
 export function Topbar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const { session, signOut } = useAuth();
   const { transactions, accounts } = useLedger();
+  const [signOutError, setSignOutError] = useState("");
   const title = pageTitle(pathname);
   const onAccountDetails = pathname.startsWith("/accounts/");
+  const email = session?.user.email ?? "Signed-in user";
+  const initials = email.slice(0, 2).toUpperCase();
 
   const notifications = transactions.slice(0, 3);
+
+  async function handleSignOut() {
+    setSignOutError("");
+    try {
+      await signOut();
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : "Could not sign out.");
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur md:px-6">
@@ -155,27 +170,36 @@ export function Topbar() {
             >
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                  AD
+                  {initials}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden text-sm font-medium lg:block">Administrator</span>
+              <span className="hidden max-w-40 truncate text-sm font-medium lg:block">{email}</span>
               <ChevronRight className="hidden h-3.5 w-3.5 rotate-90 text-muted-foreground lg:block" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>
-              Administrator
+              <span className="block max-w-64 truncate">{email}</span>
               <Badge variant="secondary" className="mt-1 block w-fit font-normal">
-                Full access
+                Signed in
               </Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {signOutError ? (
+              <p className="px-2 py-1 text-xs text-destructive" role="alert">
+                {signOutError}
+              </p>
+            ) : null}
             <DropdownMenuItem
               className="cursor-pointer"
               onSelect={() => navigate({ to: "/settings" })}
             >
               <SettingsIcon className="mr-2 h-4 w-4" />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer" onSelect={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

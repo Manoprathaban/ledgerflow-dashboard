@@ -7,11 +7,15 @@ import {
   HeadContent,
   Scripts,
   type ErrorComponentProps,
+  useNavigate,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
+import { AuthProvider } from "../contexts/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 
 function NotFoundComponent() {
   return (
@@ -129,8 +133,55 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <AuthenticatedOutlet />
+      </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+function AuthenticatedOutlet() {
+  const { session, loading, isConfigured } = useAuth();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const navigate = useNavigate();
+  const requiresAuth = pathname !== "/login";
+
+  useEffect(() => {
+    if (requiresAuth && !loading && isConfigured && !session) {
+      void navigate({ to: "/login", replace: true });
+    }
+  }, [isConfigured, loading, navigate, requiresAuth, session]);
+
+  if (requiresAuth && loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground" role="status">
+          Checking your sign-in…
+        </p>
+      </div>
+    );
+  }
+
+  if (requiresAuth && !isConfigured) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <p className="max-w-md text-center text-sm text-muted-foreground" role="alert">
+          Supabase authentication is not configured. Set VITE_SUPABASE_URL and
+          VITE_SUPABASE_ANON_KEY to continue.
+        </p>
+      </div>
+    );
+  }
+
+  if (requiresAuth && !session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground" role="status">
+          Redirecting to sign in…
+        </p>
+      </div>
+    );
+  }
+
+  return <Outlet />;
 }
