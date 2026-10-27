@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,7 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_headers=["Content-Type", "Accept", "Authorization"],
 )
 
 app.include_router(api_router)
@@ -148,6 +148,22 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
                 "details": details,
             }
         },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if exc.status_code == 401:
+        code = "AUTHENTICATION_REQUIRED"
+    elif exc.status_code == 503:
+        code = "AUTHENTICATION_UNAVAILABLE"
+    else:
+        code = "HTTP_ERROR"
+    message = exc.detail if isinstance(exc.detail, str) else "The request could not be completed."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": message}},
+        headers=exc.headers,
     )
 
 

@@ -36,21 +36,21 @@ def _search_pattern(search: str) -> str:
 
 class TransactionRepository:
     def create_transaction(
-        self, account_id: UUID, request: TransactionCreateRequest
+        self, owner_id: UUID, account_id: UUID, request: TransactionCreateRequest
     ) -> dict[str, Any]:
         amount = Decimal(request.amount)
         delta = amount if request.type == "credit" else -amount
         try:
-            with transaction_manager() as conn:
+            with transaction_manager(owner_id) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(
                         """
                         SELECT balance
                         FROM public.accounts
-                        WHERE id = %s
+                        WHERE id = %s AND owner_id = %s
                         FOR UPDATE
                         """,
-                        (account_id,),
+                        (account_id, owner_id),
                     )
                     account = cursor.fetchone()
                     if account is None:
@@ -84,28 +84,34 @@ class TransactionRepository:
                         raise RuntimeError("Transaction insert did not return a row")
 
                     cursor.execute(
-                        "UPDATE public.accounts SET balance = %s WHERE id = %s",
-                        (new_balance, account_id),
+                        """
+                        UPDATE public.accounts SET balance = %s
+                        WHERE id = %s AND owner_id = %s
+                        """,
+                        (new_balance, account_id, owner_id),
                     )
                     return transaction
         except UniqueViolation as exc:
             raise DuplicateReferenceError(request.reference_id) from exc
 
-    def get_transaction(self, transaction_id: UUID) -> dict[str, Any] | None:
-        with get_db_connection() as conn:
+    def get_transaction(self, owner_id: UUID, transaction_id: UUID) -> dict[str, Any] | None:
+        with get_db_connection(owner_id) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT id, account_id, type, amount, description, reference_id, created_at
-                    FROM public.transactions
-                    WHERE id = %s
+                    SELECT t.id, t.account_id, t.type, t.amount, t.description,
+                           t.reference_id, t.created_at
+                    FROM public.transactions t
+                    JOIN public.accounts a ON a.id = t.account_id
+                    WHERE t.id = %s AND a.owner_id = %s
                     """,
-                    (transaction_id,),
+                    (transaction_id, owner_id),
                 )
                 return cursor.fetchone()
 
     def list_transactions(
         self,
+        owner_id: UUID,
         *,
         account_id: UUID | None,
         search: str | None,
@@ -116,8 +122,8 @@ class TransactionRepository:
         page_size: int,
         include_account_name: bool = False,
     ) -> tuple[list[dict[str, Any]], int]:
-        conditions: list[str] = []
-        parameters: list[object] = []
+        conditions: list[str] = ["a.owner_id = %s"]
+        parameters: list[object] = [owner_id]
         if account_id is not None:
             conditions.append("t.account_id = %s")
             parameters.append(account_id)
@@ -143,18 +149,16 @@ class TransactionRepository:
             parameters.extend([pattern] * len(search_fields))
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        join_clause = (
-            "JOIN public.accounts a ON a.id = t.account_id" if include_account_name else ""
-        )
+        join_clause = "JOIN public.accounts a ON a.id = t.account_id"
         select_account_name = ", a.name AS account_name" if include_account_name else ""
         offset = (page - 1) * page_size
 
-        with get_db_connection() as conn:
+        with get_db_connection(owner_id) as conn:
             with conn.cursor() as cursor:
                 if account_id is not None:
                     cursor.execute(
-                        "SELECT 1 FROM public.accounts WHERE id = %s",
-                        (account_id,),
+                        "SELECT 1 FROM public.accounts WHERE id = %s AND owner_id = %s",
+                        (account_id, owner_id),
                     )
                     if cursor.fetchone() is None:
                         raise AccountNotFoundError(account_id)

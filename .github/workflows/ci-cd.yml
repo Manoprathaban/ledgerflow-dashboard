@@ -92,6 +92,9 @@ jobs:
         env:
           PGPASSWORD: ledger
         run: |
+          psql -h localhost -U ledger -d ledger \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY); CREATE ROLE service_role BYPASSRLS"
           for migration in supabase/migrations/*.sql; do
             psql -h localhost -U ledger -d ledger \
               -v ON_ERROR_STOP=1 \
@@ -104,12 +107,12 @@ jobs:
           psql -h localhost -U ledger -d ledger \
             -v ON_ERROR_STOP=1 \
             -f backend/tests/sql/verify_schema.sql
-      - name: Check Supabase RLS and backend-only policies
+      - name: Check tenant RLS policies and application role
         env:
           PGPASSWORD: ledger
         run: |
           psql -h localhost -U ledger -d ledger -v ON_ERROR_STOP=1 -c \
-            "SELECT 1 / CASE WHEN bool_and(relrowsecurity) AND (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('accounts', 'transactions') AND policyname IN ('accounts_backend_access', 'accounts_backend_only', 'transactions_backend_access', 'transactions_backend_only')) = 4 THEN 1 ELSE 0 END FROM pg_class WHERE oid IN ('public.accounts'::regclass, 'public.transactions'::regclass)"
+            "SELECT 1 / CASE WHEN bool_and(relrowsecurity AND relforcerowsecurity) AND (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('accounts', 'transactions', 'transfers') AND policyname IN ('accounts_tenant_access', 'transactions_tenant_access', 'transfers_tenant_access')) = 3 AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ledger_app' AND NOT rolbypassrls) THEN 1 ELSE 0 END FROM pg_class WHERE oid IN ('public.accounts'::regclass, 'public.transactions'::regclass, 'public.transfers'::regclass)"
 
   deploy_database:
     name: Apply Supabase migrations

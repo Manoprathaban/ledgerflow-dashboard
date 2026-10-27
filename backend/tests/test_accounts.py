@@ -23,8 +23,10 @@ class FakeAccountRepository:
             }
         ]
         self.created_name: str | None = None
+        self.owner_id: UUID | None = None
 
-    def create_account(self, name: str) -> dict[str, object]:
+    def create_account(self, owner_id: UUID, name: str) -> dict[str, object]:
+        self.owner_id = owner_id
         self.created_name = name
         return {
             "id": ACCOUNT_ID,
@@ -34,11 +36,13 @@ class FakeAccountRepository:
         }
 
     def list_accounts(
-        self, *, search: str | None, page: int, page_size: int
+        self, owner_id: UUID, *, search: str | None, page: int, page_size: int
     ) -> tuple[list[dict[str, object]], int]:
+        self.owner_id = owner_id
         return self.accounts, 21
 
-    def get_account(self, account_id: UUID) -> dict[str, object] | None:
+    def get_account(self, owner_id: UUID, account_id: UUID) -> dict[str, object] | None:
+        self.owner_id = owner_id
         return next((account for account in self.accounts if account["id"] == account_id), None)
 
 

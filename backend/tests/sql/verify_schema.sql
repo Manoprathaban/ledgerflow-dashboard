@@ -59,17 +59,67 @@ BEGIN
         SELECT COUNT(*)
         FROM pg_policies
         WHERE schemaname = 'public'
-          AND tablename IN ('accounts', 'transactions')
+          AND tablename IN ('accounts', 'transactions', 'transfers')
           AND policyname IN (
-              'accounts_backend_access',
-              'accounts_backend_only',
-              'transactions_backend_access',
-              'transactions_backend_only'
+              'accounts_tenant_access',
+              'transactions_tenant_access',
+              'transfers_tenant_access'
           )
-    ) != 4 THEN
-        RAISE EXCEPTION 'Expected backend-only RLS policies on both ledger tables';
+    ) != 3 THEN
+        RAISE EXCEPTION 'Expected tenant RLS policies on ledger tables';
     END IF;
 END;
 $$;
 
+INSERT INTO auth.users (id)
+VALUES
+    ('30000000-0000-4000-8000-000000000001'),
+    ('30000000-0000-4000-8000-000000000002');
+
+UPDATE public.accounts
+SET owner_id = '30000000-0000-4000-8000-000000000001'
+WHERE id = '10000000-0000-4000-8000-000000000001';
+
+INSERT INTO public.accounts (id, owner_id, name)
+VALUES
+    ('10000000-0000-4000-8000-000000000002',
+     '30000000-0000-4000-8000-000000000002',
+     'Another tenant account');
+
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO public.transfers
+            (owner_id, source_account_id, destination_account_id, amount)
+        VALUES
+            ('30000000-0000-4000-8000-000000000001',
+             '10000000-0000-4000-8000-000000000001',
+             '10000000-0000-4000-8000-000000000002',
+             1.00);
+        RAISE EXCEPTION 'Expected cross-tenant transfer rejection';
+    EXCEPTION WHEN foreign_key_violation THEN
+        NULL;
+    END;
+END;
+$$;
+
+SET LOCAL ROLE ledger_app;
+SELECT set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000001', true);
+
+DO $$
+BEGIN
+    IF (SELECT COUNT(*) FROM public.accounts) != 1 THEN
+        RAISE EXCEPTION 'Tenant RLS exposed another owner account';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM public.transactions
+        WHERE id = '20000000-0000-4000-8000-000000000001'
+    ) THEN
+        RAISE EXCEPTION 'Tenant RLS hid an account transaction from its owner';
+    END IF;
+END;
+$$;
+
+RESET ROLE;
 ROLLBACK;

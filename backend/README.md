@@ -33,7 +33,9 @@ pip install -r requirements.txt
 
 ## Environment configuration
 
-Copy the example environment file and adjust the database URL as needed:
+Copy the example environment file and set the database URL plus the Supabase
+project URL and public anon key. The API uses the Supabase Auth user endpoint to
+validate incoming access tokens.
 
 ```bash
 cp .env.example .env
@@ -41,7 +43,12 @@ cp .env.example .env
 
 ## Supabase database migrations
 
-The deployment migrations in [`../supabase/migrations/`](../supabase/migrations/) create the account and transaction tables, constraints, indexes, timestamp/immutability triggers, and backend-only row-level security policies. The app must use a trusted server-side database credential; never put database credentials or a Supabase service-role key in the frontend.
+The deployment migrations in [`../supabase/migrations/`](../supabase/migrations/)
+create tenant-owned accounts, transactions, transfer records, integrity
+constraints, indexes, timestamp/immutability triggers, and row-level security
+policies. The `ledger_app` role is a non-bypass RLS role used by the API. The
+migration grants it to the migration role and, when present, the standard
+`postgres` and `service_role` roles. Keep database credentials server-side.
 
 After confirming the intended Supabase project and environment, install the Supabase CLI, authenticate, link the project, inspect pending migrations, and apply them:
 
@@ -52,7 +59,13 @@ supabase migration list
 supabase db push
 ```
 
-`db push` changes the linked remote database. Confirm the project reference and review the migration before running it; do not apply this initial schema migration over pre-existing ledger tables without first inspecting and planning for their data.
+`db push` changes the linked remote database. Confirm the project reference and
+review the migration before running it. The tenant migration preserves existing
+accounts but leaves their new `owner_id` unset because ownership cannot be
+inferred safely. Those accounts and their transaction history stay hidden from
+users until an administrator assigns each account to the correct
+`auth.users.id`. Do not assign all existing records to one user unless that is
+the intended ownership mapping.
 
 ## Run the app
 
@@ -70,10 +83,19 @@ pytest
 
 The backend is a FastAPI layered monolith using Psycopg 3 and raw SQL. SQLAlchemy and other ORM packages are not dependencies. The target API, schema, and frontend payload designs are documented in [`docs/api-contracts.md`](docs/api-contracts.md), [`docs/schema-design.md`](docs/schema-design.md), and [`docs/frontend-design.md`](docs/frontend-design.md).
 
-Account creation, retrieval, balance reads, paginated account search, transaction creation, transaction detail, filtered transaction history, and account-to-account transfers are implemented with PostgreSQL persistence. Account-scoped transactions and transfers lock account rows and commit immutable ledger entries and balance updates atomically. Transfers lock both accounts in UUID order and create one debit and one credit in the same database transaction.
+Account creation, retrieval, balance reads, paginated account search,
+transaction creation, transaction detail, filtered transaction history, and
+account-to-account transfers are implemented with PostgreSQL persistence.
+Every API request requires a valid Supabase Bearer token. Accounts are owned by
+the authenticated Supabase user; account and transaction queries are explicitly
+scoped, and PostgreSQL RLS applies the same owner check. Transfers are recorded
+in a dedicated table and are restricted to accounts owned by the same user.
+Transfers lock both accounts in UUID order and commit the transfer record, two
+immutable ledger entries, and both balance updates in one database
+transaction.
 
 - Transaction amount validation accepts positive decimal strings with up to two fractional digits; descriptions are optional and normalized to an empty string when omitted or blank.
-- The API allows browser cross-origin requests; the backend currently has no user authentication, so configure authentication and restrict allowed origins before exposing sensitive or user-specific data.
+- Configure `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the backend, and restrict CORS origins to deployed frontend domains before production use.
 - [`sql/schema.sql`](sql/schema.sql) is a local bootstrap snapshot; Supabase migration history is authoritative for remote deployments.
 - The frontend calls the Render API for accounts, transactions, and money transfers.
 - API tests cover success/error response shapes and validation. A PostgreSQL-backed smoke flow has been run against a temporary database, but PostgreSQL integration tests are not yet part of the automated suite. Add automated concurrency tests for simultaneous debits and transaction rollback invariants before production use.

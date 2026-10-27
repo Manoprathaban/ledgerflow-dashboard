@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 const API_BASE_URL = (
   import.meta.env["VITE_API_BASE_URL"] ?? "https://ledgerflow-dashboard-xi1j.onrender.com"
 ).replace(/\/+$/, "");
@@ -23,12 +25,25 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (!supabase) {
+    throw new ApiError("Supabase authentication is not configured.", 401, "AUTH_REQUIRED");
+  }
+  const { data, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw new ApiError("Could not restore the Supabase session.", 401, "AUTH_SESSION_ERROR");
+  }
+  const accessToken = data.session?.access_token;
+  if (!accessToken) {
+    throw new ApiError("Sign in to access your ledger data.", 401, "AUTH_REQUIRED");
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
       ...options,
       headers: {
         Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
         ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...options.headers,
       },

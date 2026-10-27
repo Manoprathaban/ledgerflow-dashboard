@@ -20,6 +20,7 @@ from app.services.transfer_service import TransferService
 
 SOURCE_ID = UUID("5e9f8eb4-9831-4d0a-b9b0-9ff5f41d6722")
 DESTINATION_ID = UUID("47d65b2d-e0c1-4a43-92a5-b79da56f4c10")
+OWNER_ID = UUID("00000000-0000-4000-8000-000000000001")
 CREATED_AT = datetime(2026, 10, 27, 8, 0, tzinfo=UTC)
 TRANSFER_ID = UUID("8ec6d6ca-2c2a-4abc-89a3-fafee1a6d15c")
 
@@ -30,6 +31,7 @@ def account_row(account_id: UUID, name: str, balance: str) -> dict[str, object]:
 
 class FakeTransferRepository:
     def __init__(self) -> None:
+        self.owner_id: UUID | None = None
         self.transfer = {
             "transfer_id": TRANSFER_ID,
             "source_transaction": {
@@ -55,7 +57,8 @@ class FakeTransferRepository:
         }
         self.error: Exception | None = None
 
-    def create_transfer(self, request: MoneyTransferRequest) -> dict[str, object]:
+    def create_transfer(self, owner_id: UUID, request: MoneyTransferRequest) -> dict[str, object]:
+        self.owner_id = owner_id
         if self.error is not None:
             raise self.error
         return self.transfer
@@ -80,7 +83,7 @@ def transfer_payload(**overrides):
 
 
 def test_create_transfer_returns_both_ledger_entries_and_balances(transfer_api):
-    client, _ = transfer_api
+    client, repository = transfer_api
 
     response = client.post("/api/v1/transfers", json=transfer_payload())
 
@@ -93,6 +96,7 @@ def test_create_transfer_returns_both_ledger_entries_and_balances(transfer_api):
     assert body["destination_transaction"]["amount"] == "30.00"
     assert body["source_balance"] == "70.00"
     assert body["destination_balance"] == "80.00"
+    assert repository.owner_id == OWNER_ID
 
 
 @pytest.mark.parametrize(
@@ -144,6 +148,7 @@ class FakeCursor:
         self.insert_count = 0
         self.calls: list[tuple[str, tuple[object, ...] | None]] = []
         self.last_insert: tuple[object, ...] | None = None
+        self.transaction_inserts: list[tuple[object, ...]] = []
 
     def __enter__(self):
         return self
@@ -158,13 +163,15 @@ class FakeCursor:
             if self.insert_count == self.fail_on_insert:
                 raise RuntimeError("Simulated destination insert failure")
             self.last_insert = params
+            assert params is not None
+            self.transaction_inserts.append(params)
 
     def fetchall(self) -> list[dict[str, object]]:
         return self.accounts
 
     def fetchone(self) -> dict[str, object]:
         assert self.last_insert is not None
-        account_id, transaction_type, amount, description, reference_id = self.last_insert
+        account_id, transaction_type, amount, description, reference_id, _ = self.last_insert
         return {
             "id": UUID(int=self.insert_count),
             "account_id": account_id,
@@ -215,10 +222,10 @@ def test_repository_transfer_commits_two_entries_and_balance_updates(monkeypatch
         ]
     )
     connection = FakeConnection(cursor)
-    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda user_id: connection)
     request = MoneyTransferRequest.model_validate(transfer_payload())
 
-    transfer = TransferRepository().create_transfer(request)
+    transfer = TransferRepository().create_transfer(OWNER_ID, request)
 
     assert connection.committed
     assert not connection.rolled_back
@@ -227,8 +234,13 @@ def test_repository_transfer_commits_two_entries_and_balance_updates(monkeypatch
     assert cursor.insert_count == 2
     lock_query, lock_params = cursor.calls[0]
     assert "ORDER BY id" in lock_query
-    assert lock_params == list(sorted((SOURCE_ID, DESTINATION_ID)))
-    updates = [(query, params) for query, params in cursor.calls if query.startswith("UPDATE")]
+    assert lock_params == (OWNER_ID, *sorted((SOURCE_ID, DESTINATION_ID)))
+    assert any("INSERT INTO public.transfers" in query for query, _ in cursor.calls)
+    assert len(cursor.transaction_inserts) == 2
+    assert all(params[-1] == transfer["transfer_id"] for params in cursor.transaction_inserts)
+    updates = [
+        (query, params) for query, params in cursor.calls if "UPDATE public.accounts" in query
+    ]
     assert len(updates) == 2
     assert [params[0] for _, params in updates] == [Decimal("70.00"), Decimal("80.00")]
 
@@ -242,15 +254,15 @@ def test_repository_rolls_back_when_destination_entry_fails(monkeypatch):
         fail_on_insert=2,
     )
     connection = FakeConnection(cursor)
-    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda user_id: connection)
     request = MoneyTransferRequest.model_validate(transfer_payload())
 
     with pytest.raises(RuntimeError, match="destination insert"):
-        TransferRepository().create_transfer(request)
+        TransferRepository().create_transfer(OWNER_ID, request)
 
     assert connection.rolled_back
     assert not connection.committed
-    assert not any(query.startswith("UPDATE") for query, _ in cursor.calls)
+    assert not any("UPDATE public.accounts" in query for query, _ in cursor.calls)
 
 
 def test_repository_rejects_insufficient_balance_before_writing(monkeypatch):
@@ -261,11 +273,11 @@ def test_repository_rejects_insufficient_balance_before_writing(monkeypatch):
         ]
     )
     connection = FakeConnection(cursor)
-    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda user_id: connection)
     request = MoneyTransferRequest.model_validate(transfer_payload())
 
     with pytest.raises(InsufficientBalanceError):
-        TransferRepository().create_transfer(request)
+        TransferRepository().create_transfer(OWNER_ID, request)
 
     assert connection.rolled_back
     assert cursor.insert_count == 0
@@ -274,11 +286,11 @@ def test_repository_rejects_insufficient_balance_before_writing(monkeypatch):
 def test_repository_rejects_missing_destination_before_writing(monkeypatch):
     cursor = FakeCursor([account_row(SOURCE_ID, "Checking", "100.00")])
     connection = FakeConnection(cursor)
-    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda user_id: connection)
     request = MoneyTransferRequest.model_validate(transfer_payload())
 
     with pytest.raises(AccountNotFoundError) as error:
-        TransferRepository().create_transfer(request)
+        TransferRepository().create_transfer(OWNER_ID, request)
 
     assert error.value.account_id == DESTINATION_ID
     assert connection.rolled_back
@@ -293,11 +305,11 @@ def test_repository_rejects_destination_balance_overflow_before_writing(monkeypa
         ]
     )
     connection = FakeConnection(cursor)
-    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda: connection)
+    monkeypatch.setattr(transaction_manager_module, "get_db_connection", lambda user_id: connection)
     request = MoneyTransferRequest.model_validate(transfer_payload(amount="0.01"))
 
     with pytest.raises(BalanceLimitExceededError):
-        TransferRepository().create_transfer(request)
+        TransferRepository().create_transfer(OWNER_ID, request)
 
     assert connection.rolled_back
     assert cursor.insert_count == 0

@@ -1,9 +1,28 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMoneyTransfer } from "./transferService";
 
+const { getSessionMock } = vi.hoisted(() => ({
+  getSessionMock: vi.fn(),
+}));
+
+vi.mock("./supabase", () => ({
+  supabase: {
+    auth: {
+      getSession: getSessionMock,
+    },
+  },
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  getSessionMock.mockResolvedValue({
+    data: { session: { access_token: "access-token" } },
+    error: null,
+  });
 });
 
 describe("createMoneyTransfer", () => {
@@ -34,6 +53,7 @@ describe("createMoneyTransfer", () => {
       "https://ledgerflow-dashboard-xi1j.onrender.com/api/v1/transfers",
       expect.objectContaining({
         method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer access-token" }),
         body: JSON.stringify({
           source_account_id: "source-id",
           destination_account_id: "destination-id",

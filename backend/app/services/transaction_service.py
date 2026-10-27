@@ -18,19 +18,20 @@ class TransactionService:
         self.repository = repository or TransactionRepository()
 
     def create_transaction(
-        self, account_id: UUID, request: TransactionCreateRequest
+        self, owner_id: UUID, account_id: UUID, request: TransactionCreateRequest
     ) -> dict[str, Any]:
-        transaction = self.repository.create_transaction(account_id, request)
+        transaction = self.repository.create_transaction(owner_id, account_id, request)
         return self._format_transaction(transaction)
 
-    def get_transaction(self, transaction_id: UUID) -> dict[str, Any]:
-        transaction = self.repository.get_transaction(transaction_id)
+    def get_transaction(self, owner_id: UUID, transaction_id: UUID) -> dict[str, Any]:
+        transaction = self.repository.get_transaction(owner_id, transaction_id)
         if transaction is None:
             raise TransactionNotFoundError(transaction_id)
         return self._format_transaction(transaction)
 
     def list_transactions(
         self,
+        owner_id: UUID,
         *,
         account_id: UUID | None = None,
         search: str | None = None,
@@ -44,6 +45,7 @@ class TransactionService:
         if start_date is not None and end_date is not None and start_date > end_date:
             raise InvalidDateRangeError()
         transactions, total = self.repository.list_transactions(
+            owner_id,
             account_id=account_id,
             search=search,
             transaction_type=transaction_type,

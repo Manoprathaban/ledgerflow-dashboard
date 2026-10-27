@@ -12,12 +12,14 @@ class AccountService:
     def __init__(self, repository: AccountRepository | None = None) -> None:
         self.repository = repository or AccountRepository()
 
-    def create_account(self, name: str) -> dict[str, Any]:
-        return self._format_account(self.repository.create_account(name))
+    def create_account(self, owner_id: UUID, name: str) -> dict[str, Any]:
+        return self._format_account(self.repository.create_account(owner_id, name))
 
-    def list_accounts(self, *, search: str | None, page: int, page_size: int) -> dict[str, Any]:
+    def list_accounts(
+        self, owner_id: UUID, *, search: str | None, page: int, page_size: int
+    ) -> dict[str, Any]:
         accounts, total = self.repository.list_accounts(
-            search=search, page=page, page_size=page_size
+            owner_id, search=search, page=page, page_size=page_size
         )
         return {
             "items": [self._format_account(account) for account in accounts],
@@ -27,14 +29,14 @@ class AccountService:
             "total_pages": (total + page_size - 1) // page_size,
         }
 
-    def get_account(self, account_id: UUID) -> dict[str, Any]:
-        account = self.repository.get_account(account_id)
+    def get_account(self, owner_id: UUID, account_id: UUID) -> dict[str, Any]:
+        account = self.repository.get_account(owner_id, account_id)
         if account is None:
             raise AccountNotFoundError(account_id)
         return self._format_account(account)
 
-    def get_balance(self, account_id: UUID) -> dict[str, Any]:
-        account = self.repository.get_account(account_id)
+    def get_balance(self, owner_id: UUID, account_id: UUID) -> dict[str, Any]:
+        account = self.repository.get_account(owner_id, account_id)
         if account is None:
             raise AccountNotFoundError(account_id)
         return {

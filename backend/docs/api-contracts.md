@@ -9,6 +9,11 @@ Related design docs:
 ## Conventions
 
 - Base path: `/api/v1`
+- All account, transaction, and transfer endpoints require
+  `Authorization: Bearer <Supabase access token>`. The API validates the token
+  with Supabase Auth; the authenticated Supabase user is the tenant.
+- Every account and transaction response is restricted to that user. A user can
+  transfer only between accounts they own.
 - Resource identifiers use UUIDs (`uuid` format).
 - Monetary values are serialized as decimal-safe strings with exactly two fractional digits, for example `"1250.00"`, never as floats. Requests may provide one or two fractional digits.
 - Account names and descriptions are trimmed. Reference IDs are trimmed and case-folded before storage; reference uniqueness is case-insensitive.
@@ -51,12 +56,14 @@ Related design docs:
 
 - `200 OK`: successful read
 - `201 Created`: successful creation
+- `401 Unauthorized`: missing, invalid, or expired Supabase access token
+- `503 Service Unavailable`: Supabase Auth is not configured or cannot validate the token
 - `404 Not Found`: resource not found
 - `409 Conflict`: duplicate reference, insufficient balance, or balance limit exceeded
 - `422 Unprocessable Entity`: malformed JSON, invalid UUID, query parameter, or request field
 - `500 Internal Server Error`: unexpected backend failure
 
-Error `code` values are `VALIDATION_ERROR`, `ACCOUNT_NOT_FOUND`, `TRANSACTION_NOT_FOUND`, `DUPLICATE_REFERENCE`, `INSUFFICIENT_BALANCE`, `BALANCE_LIMIT_EXCEEDED`, and `INTERNAL_ERROR`. `details` is omitted when no field-specific information applies and is otherwise an array of `{ "field": string, "issue": string }` entries. All API errors use the error envelope above. FastAPI's default validation error body must be translated to this envelope by an exception handler; unexpected `500` responses must not disclose stack traces or database details.
+Error `code` values include `AUTHENTICATION_REQUIRED`, `AUTHENTICATION_UNAVAILABLE`, `VALIDATION_ERROR`, `ACCOUNT_NOT_FOUND`, `TRANSACTION_NOT_FOUND`, `DUPLICATE_REFERENCE`, `INSUFFICIENT_BALANCE`, `BALANCE_LIMIT_EXCEEDED`, and `INTERNAL_ERROR`. `details` is omitted when no field-specific information applies and is otherwise an array of `{ "field": string, "issue": string }` entries. All API errors use the error envelope above. FastAPI's default validation error body is translated to this envelope; unexpected `500` responses do not disclose stack traces or database details.
 
 ## Account model
 
@@ -213,6 +220,10 @@ the transfer is committed.
 The source and destination must be different existing accounts. The amount is
 a positive decimal string with at most two fractional digits. The service locks
 both account rows in a consistent order to prevent overdrafts and deadlocks.
+Both accounts must belong to the authenticated user. A durable transfer row,
+its debit and credit entries, and the balance updates are committed in one
+database transaction; the database also enforces that both accounts share the
+same owner.
 
 #### Success response: `201 Created`
 

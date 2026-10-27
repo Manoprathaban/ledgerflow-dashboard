@@ -35,13 +35,13 @@ def transaction_row(**overrides):
 class FakeTransactionRepository:
     def __init__(self) -> None:
         self.transaction = transaction_row()
-        self.created_args: tuple[UUID, object] | None = None
+        self.created_args: tuple[UUID, UUID, object] | None = None
         self.list_args: dict[str, object] | None = None
         self.create_error: Exception | None = None
         self.account_exists = True
 
-    def create_transaction(self, account_id, request):
-        self.created_args = (account_id, request)
+    def create_transaction(self, owner_id, account_id, request):
+        self.created_args = (owner_id, account_id, request)
         if self.create_error is not None:
             raise self.create_error
         return {
@@ -52,13 +52,14 @@ class FakeTransactionRepository:
             "reference_id": request.reference_id,
         }
 
-    def get_transaction(self, transaction_id):
+    def get_transaction(self, owner_id, transaction_id):
         if transaction_id != self.transaction["id"]:
             return None
         return self.transaction
 
     def list_transactions(
         self,
+        owner_id,
         *,
         account_id,
         search,
@@ -70,6 +71,7 @@ class FakeTransactionRepository:
         include_account_name=False,
     ):
         self.list_args = {
+            "owner_id": owner_id,
             "account_id": account_id,
             "search": search,
             "transaction_type": transaction_type,
@@ -99,12 +101,13 @@ def test_api_allows_browser_cors_preflight(client):
         headers={
             "Origin": "https://ledgerflow-dashboard.vercel.app",
             "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "content-type",
+            "Access-Control-Request-Headers": "content-type,authorization",
         },
     )
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "*"
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
 
 
 def test_create_account_transaction_returns_contract_response(transaction_api):
@@ -130,7 +133,7 @@ def test_create_account_transaction_returns_contract_response(transaction_api):
         "reference_id": "inv-1024",
         "created_at": "2026-10-26T12:15:00Z",
     }
-    assert repository.created_args[0] == ACCOUNT_ID
+    assert repository.created_args[1] == ACCOUNT_ID
 
 
 def test_create_account_transaction_allows_omitted_description(transaction_api):
@@ -233,6 +236,7 @@ def test_global_transaction_list_response_and_filters(transaction_api):
         "total_pages": 3,
     }
     assert repository.list_args == {
+        "owner_id": UUID("00000000-0000-4000-8000-000000000001"),
         "account_id": ACCOUNT_ID,
         "search": "invoice",
         "transaction_type": "credit",

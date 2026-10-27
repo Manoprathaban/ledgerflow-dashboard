@@ -17,6 +17,7 @@ This document describes the PostgreSQL schema that supports the Ledger API contr
 ```sql
 CREATE TABLE public.accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id UUID REFERENCES auth.users(id) ON DELETE RESTRICT,
     name VARCHAR(200) NOT NULL,
     balance NUMERIC(18, 2) NOT NULL DEFAULT 0.00
         CONSTRAINT accounts_balance_non_negative CHECK (balance >= 0),
@@ -29,9 +30,39 @@ CREATE TABLE public.accounts (
 #### Notes
 
 - The `id` is the canonical resource identifier used in the API.
+- `owner_id` is the Supabase Auth user that owns this account. The deployment
+  migration initially leaves legacy account owners unset; map existing
+  accounts to the correct user before exposing their rows.
 - `name` is trimmed before persistence and enforced as a non-empty value.
 - `balance` stores the current account net value as a decimal-safe number.
 - `updated_at` is useful for auditing and future optimistic locking or data sync use cases.
+
+### `transfers`
+
+Each successful account-to-account transfer has one durable transfer row that
+references its tenant and both accounts. Composite foreign keys enforce that
+the source and destination belong to the same owner.
+
+```sql
+CREATE TABLE public.transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+    source_account_id UUID NOT NULL,
+    destination_account_id UUID NOT NULL,
+    amount NUMERIC(18, 2) NOT NULL CHECK (amount > 0),
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (owner_id, source_account_id)
+        REFERENCES public.accounts (owner_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (owner_id, destination_account_id)
+        REFERENCES public.accounts (owner_id, id) ON DELETE RESTRICT,
+    CHECK (source_account_id <> destination_account_id)
+);
+```
+
+The transfer row, paired immutable transaction entries, and account balance
+updates are written in one PostgreSQL transaction. The transfer identifier on
+the two transaction entries links the ledger movements to their transfer.
 
 ### `transactions`
 
@@ -43,6 +74,7 @@ CREATE TABLE public.transactions (
     amount NUMERIC(18, 2) NOT NULL CHECK (amount > 0),
     description VARCHAR(500) NOT NULL DEFAULT '',
     reference_id VARCHAR(200) NOT NULL,
+    transfer_id UUID REFERENCES public.transfers(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT transactions_reference_not_blank CHECK (reference_id ~ '[^[:space:]]'),
     CONSTRAINT transactions_reference_canonical CHECK (reference_id = lower(reference_id))
@@ -83,7 +115,11 @@ ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 - `description` is stored as-is after trimming at the API layer.
 - Immutability triggers reject `UPDATE`, `DELETE`, and `TRUNCATE` on transaction rows. The application database role should not own the tables or have DDL privileges.
 - The unique reference index is case-insensitive and supports the per-account duplicate check. The reference canonicalization rule must be the same in API validation and SQL.
-- Row-level security uses backend-only policies. They allow the trusted `postgres` and `service_role` database roles while blocking Supabase `anon` and `authenticated` roles. Never expose privileged credentials to browser code.
+- Row-level security compares each account and transfer owner to the Supabase
+  JWT subject. Transaction visibility is derived from the owning account. The
+  API validates Supabase access tokens and assumes a dedicated `ledger_app`
+  database role with `NOBYPASSRLS`; its request transaction sets the JWT subject
+  before issuing any SQL.
 
 ## Supporting indexes
 

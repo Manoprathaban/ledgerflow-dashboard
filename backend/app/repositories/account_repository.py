@@ -7,16 +7,16 @@ from app.db.connection import get_db_connection
 
 
 class AccountRepository:
-    def create_account(self, name: str) -> dict[str, Any]:
-        with get_db_connection() as conn:
+    def create_account(self, owner_id: UUID, name: str) -> dict[str, Any]:
+        with get_db_connection(owner_id) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO public.accounts (name)
-                    VALUES (%s)
+                    INSERT INTO public.accounts (owner_id, name)
+                    VALUES (%s, %s)
                     RETURNING id, name, balance, created_at
                     """,
-                    (name,),
+                    (owner_id, name),
                 )
                 row = cursor.fetchone()
                 if row is None:
@@ -24,10 +24,10 @@ class AccountRepository:
                 return row
 
     def list_accounts(
-        self, *, search: str | None, page: int, page_size: int
+        self, owner_id: UUID, *, search: str | None, page: int, page_size: int
     ) -> tuple[list[dict[str, Any]], int]:
-        conditions: list[str] = []
-        parameters: list[object] = []
+        conditions = ["owner_id = %s"]
+        parameters: list[object] = [owner_id]
         if search:
             conditions.append("(name ILIKE %s OR id::text ILIKE %s)")
             pattern = f"%{search}%"
@@ -36,7 +36,7 @@ class AccountRepository:
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         offset = (page - 1) * page_size
 
-        with get_db_connection() as conn:
+        with get_db_connection(owner_id) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"SELECT COUNT(*) AS total FROM public.accounts {where_clause}",
@@ -58,15 +58,15 @@ class AccountRepository:
                 )
                 return cursor.fetchall(), total
 
-    def get_account(self, account_id: UUID) -> dict[str, Any] | None:
-        with get_db_connection() as conn:
+    def get_account(self, owner_id: UUID, account_id: UUID) -> dict[str, Any] | None:
+        with get_db_connection(owner_id) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
                     SELECT id, name, balance, created_at
                     FROM public.accounts
-                    WHERE id = %s
+                    WHERE id = %s AND owner_id = %s
                     """,
-                    (account_id,),
+                    (account_id, owner_id),
                 )
                 return cursor.fetchone()

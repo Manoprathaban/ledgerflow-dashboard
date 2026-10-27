@@ -15,22 +15,22 @@ from app.schemas.transfer import MoneyTransferRequest
 
 
 class TransferRepository:
-    def create_transfer(self, request: MoneyTransferRequest) -> dict[str, Any]:
+    def create_transfer(self, owner_id: UUID, request: MoneyTransferRequest) -> dict[str, Any]:
         transfer_id = uuid4()
         reference_prefix = f"transfer-{transfer_id.hex}"
         account_ids = sorted((request.source_account_id, request.destination_account_id))
 
-        with transaction_manager() as conn:
+        with transaction_manager(owner_id) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
                     SELECT id, name, balance
                     FROM public.accounts
-                    WHERE id IN (%s, %s)
+                    WHERE owner_id = %s AND id IN (%s, %s)
                     ORDER BY id
                     FOR UPDATE
                     """,
-                    account_ids,
+                    (owner_id, *account_ids),
                 )
                 accounts = {row["id"]: row for row in cursor.fetchall()}
 
@@ -49,8 +49,25 @@ class TransferRepository:
                 if destination_balance + amount > MAX_BALANCE:
                     raise BalanceLimitExceededError()
 
+                cursor.execute(
+                    """
+                    INSERT INTO public.transfers
+                        (id, owner_id, source_account_id, destination_account_id,
+                         amount, description)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        transfer_id,
+                        owner_id,
+                        request.source_account_id,
+                        request.destination_account_id,
+                        amount,
+                        request.description,
+                    ),
+                )
                 source_transaction = self._insert_transaction(
                     cursor,
+                    transfer_id=transfer_id,
                     account_id=request.source_account_id,
                     transaction_type="debit",
                     amount=amount,
@@ -61,6 +78,7 @@ class TransferRepository:
                 )
                 destination_transaction = self._insert_transaction(
                     cursor,
+                    transfer_id=transfer_id,
                     account_id=request.destination_account_id,
                     transaction_type="credit",
                     amount=amount,
@@ -73,12 +91,18 @@ class TransferRepository:
                 new_source_balance = source_balance - amount
                 new_destination_balance = destination_balance + amount
                 cursor.execute(
-                    "UPDATE public.accounts SET balance = %s WHERE id = %s",
-                    (new_source_balance, request.source_account_id),
+                    """
+                    UPDATE public.accounts SET balance = %s
+                    WHERE id = %s AND owner_id = %s
+                    """,
+                    (new_source_balance, request.source_account_id, owner_id),
                 )
                 cursor.execute(
-                    "UPDATE public.accounts SET balance = %s WHERE id = %s",
-                    (new_destination_balance, request.destination_account_id),
+                    """
+                    UPDATE public.accounts SET balance = %s
+                    WHERE id = %s AND owner_id = %s
+                    """,
+                    (new_destination_balance, request.destination_account_id, owner_id),
                 )
 
                 return {
@@ -93,6 +117,7 @@ class TransferRepository:
     def _insert_transaction(
         cursor: Any,
         *,
+        transfer_id: UUID,
         account_id: UUID,
         transaction_type: str,
         amount: Decimal,
@@ -102,11 +127,11 @@ class TransferRepository:
         cursor.execute(
             """
             INSERT INTO public.transactions
-                (account_id, type, amount, description, reference_id)
-            VALUES (%s, %s, %s, %s, %s)
+                (account_id, type, amount, description, reference_id, transfer_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id, account_id, type, amount, description, reference_id, created_at
             """,
-            (account_id, transaction_type, amount, description, reference_id),
+            (account_id, transaction_type, amount, description, reference_id, transfer_id),
         )
         transaction = cursor.fetchone()
         if transaction is None:

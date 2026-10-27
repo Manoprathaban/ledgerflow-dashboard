@@ -1,12 +1,27 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { AuthContext, type AuthContextValue } from "@/contexts/auth-context";
 import { isSupabaseConfigured, supabase } from "@/services/supabase";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<AuthContextValue["session"]>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const activeUserId = useRef<string | null>(null);
+
+  const updateSession = useCallback(
+    (nextSession: AuthContextValue["session"]) => {
+      const nextUserId = nextSession?.user.id ?? null;
+      if (activeUserId.current !== null && activeUserId.current !== nextUserId) {
+        queryClient.clear();
+      }
+      activeUserId.current = nextUserId;
+      setSession(nextSession);
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
     if (!supabase) {
@@ -19,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (active) {
-        setSession(nextSession);
+        updateSession(nextSession);
         setAuthError(null);
         setLoading(false);
       }
@@ -32,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) {
           setAuthError(error.message);
         } else {
-          setSession(data.session);
+          updateSession(data.session);
         }
         setLoading(false);
       })
@@ -48,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient, updateSession]);
 
   async function signIn(email: string, password: string) {
     if (!supabase) throw new Error("Supabase authentication is not configured.");
@@ -71,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) throw new Error("Supabase authentication is not configured.");
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    queryClient.clear();
   }
 
   return (
