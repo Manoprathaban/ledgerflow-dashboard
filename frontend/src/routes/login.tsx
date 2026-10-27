@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabaseConfigError } from "@/services/supabase";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -77,8 +78,8 @@ function LoginPage() {
               className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
               role="alert"
             >
-              Supabase authentication is not configured. Add VITE_SUPABASE_URL and
-              VITE_SUPABASE_ANON_KEY to the frontend environment.
+              Supabase authentication is not configured. {supabaseConfigError} Redeploy after fixing
+              the Production environment variables.
             </p>
           ) : null}
           {authError ? (

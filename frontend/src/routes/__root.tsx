@@ -16,6 +16,7 @@ import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
 import { AuthProvider } from "../contexts/AuthContext";
 import { useAuth } from "../hooks/useAuth";
+import { supabaseConfigError } from "../services/supabase";
 
 function NotFoundComponent() {
   return (
@@ -166,8 +167,8 @@ function AuthenticatedOutlet() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <p className="max-w-md text-center text-sm text-muted-foreground" role="alert">
-          Supabase authentication is not configured. Set VITE_SUPABASE_URL and
-          VITE_SUPABASE_ANON_KEY to continue.
+          Supabase authentication is not configured. {supabaseConfigError} Redeploy after fixing the
+          Production environment variables.
         </p>
       </div>
     );

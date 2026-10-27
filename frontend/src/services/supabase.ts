@@ -16,9 +16,22 @@ export function isValidSupabaseUrl(value: string | undefined): value is string {
   }
 }
 
+export function getSupabaseConfigError(
+  url: string | undefined,
+  anonKey: string | undefined,
+): string | null {
+  if (!url) return "VITE_SUPABASE_URL is missing from this deployment.";
+  if (!isValidSupabaseUrl(url)) {
+    return "VITE_SUPABASE_URL must be a valid HTTPS Supabase project URL.";
+  }
+  if (!anonKey) return "VITE_SUPABASE_ANON_KEY is missing from this deployment.";
+  return null;
+}
+
 const validSupabaseUrl = isValidSupabaseUrl(supabaseUrl) ? supabaseUrl : null;
 
-export const isSupabaseConfigured = Boolean(validSupabaseUrl && supabaseAnonKey);
+export const supabaseConfigError = getSupabaseConfigError(supabaseUrl, supabaseAnonKey);
+export const isSupabaseConfigured = supabaseConfigError === null;
 
 export const supabase =
   validSupabaseUrl && supabaseAnonKey ? createClient(validSupabaseUrl, supabaseAnonKey) : null;
