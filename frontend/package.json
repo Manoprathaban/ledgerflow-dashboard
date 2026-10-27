@@ -9,6 +9,7 @@
     "build:vercel": "NITRO_PRESET=vercel vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
+    "preview:vercel": "srvx serve --prod --static=../../static --entry .vercel/output/functions/__server.func/index.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",

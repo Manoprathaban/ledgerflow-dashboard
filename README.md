@@ -48,8 +48,10 @@ development or as Vercel project environment variables.
 To deploy the frontend, create a Vercel project with `frontend/` as its root
 directory, `npm ci` as the install command, and `npm run build:vercel` as the
 build command. The Vercel Nitro preset emits the server and static output for the
-deployment. Add the deployed site URL (and any preview URLs where email
-confirmation should work) to Supabase Authentication's URL configuration.
+deployment. Run `npm run preview:vercel` from `frontend/` after building to
+preview that exact deployment output locally. Add the deployed site URL (and any
+preview URLs where email confirmation should work) to Supabase Authentication's
+URL configuration.
 Keep `VITE_API_BASE_URL` pointed at the existing Render API.
 
 Frontend login gates dashboard pages, but the Render API itself remains
