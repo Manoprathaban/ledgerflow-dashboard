@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Filter, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/transactions")({
 });
 
 function TransactionsPage() {
-  const { accounts, transactions } = useLedger();
+  const { accounts } = useLedger();
   const [search, setSearch] = useState("");
   const [type, setType] = useState<"all" | "credit" | "debit">("all");
   const [accountId, setAccountId] = useState("");
@@ -33,19 +34,37 @@ function TransactionsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
-  const result = useMemo(
-    () =>
+  const resultQuery = useQuery({
+    queryKey: [
+      "ledger",
+      "transactions",
+      "list",
+      search,
+      type,
+      accountId,
+      startDate,
+      endDate,
+      page,
+      pageSize,
+    ],
+    queryFn: () =>
       listTransactions({
         search,
         type,
-        accountId,
+        ...(accountId ? { accountId } : {}),
         startDate,
         endDate,
         page,
         pageSize,
       }),
-    [search, type, accountId, startDate, endDate, page],
-  );
+  });
+  const result = resultQuery.data ?? {
+    items: [],
+    total: 0,
+    page,
+    pageSize,
+    totalPages: 0,
+  };
 
   const clearFilters = () => {
     setSearch("");
@@ -162,6 +181,16 @@ function TransactionsPage() {
             <CardTitle className="text-lg">Ledger entries</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-0 px-6 pb-6">
+            {resultQuery.isError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {resultQuery.error instanceof Error
+                  ? resultQuery.error.message
+                  : "Unable to load transactions."}
+              </p>
+            ) : null}
+            {resultQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading transactions…</p>
+            ) : null}
             {result.items.length === 0 ? (
               <EmptyState
                 title="No transactions matched"

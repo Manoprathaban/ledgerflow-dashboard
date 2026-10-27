@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { createAccount } from "@/services/accountService";
+import { ledgerQueryKeys } from "@/hooks/useLedger";
 
 interface CreateAccountDialogProps {
   onCreated?: () => void;
@@ -28,13 +30,14 @@ export function CreateAccountDialog({
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const queryClient = useQueryClient();
 
   const resetForm = () => {
     setName("");
     setError("");
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
 
@@ -47,7 +50,12 @@ export function CreateAccountDialog({
     setError("");
 
     try {
-      const created = createAccount({ name: trimmedName });
+      const created = await createAccount({ name: trimmedName });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ledgerQueryKeys.accounts }),
+        queryClient.invalidateQueries({ queryKey: ledgerQueryKeys.transactions }),
+        queryClient.invalidateQueries({ queryKey: ["ledger", "account"] }),
+      ]);
       toast.success(`Account created for ${created.name}.`);
       resetForm();
       setOpen(false);

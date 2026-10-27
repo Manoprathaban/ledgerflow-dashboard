@@ -93,6 +93,20 @@ def transaction_api(client):
     app.dependency_overrides.pop(get_transaction_service, None)
 
 
+def test_api_allows_browser_cors_preflight(client):
+    response = client.options(
+        "/api/v1/accounts",
+        headers={
+            "Origin": "https://ledgerflow-dashboard.vercel.app",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
 def test_create_account_transaction_returns_contract_response(transaction_api):
     client, repository = transaction_api
 

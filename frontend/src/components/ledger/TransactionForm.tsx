@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useLedger } from "@/hooks/useLedger";
+import { ledgerQueryKeys, useLedger } from "@/hooks/useLedger";
 import { createTransaction } from "@/services/transactionService";
 import { parseAmountToPaise, paiseToAmount } from "@/utils/money";
 
@@ -46,6 +47,7 @@ export function TransactionForm({
   submitLabel = "Submit transaction",
 }: TransactionFormProps) {
   const { accounts, transactions } = useLedger();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(() =>
     emptyForm(initialAccountId ?? accounts[0]?.id ?? ""),
   );
@@ -55,8 +57,11 @@ export function TransactionForm({
   useEffect(() => {
     if (initialAccountId && initialAccountId !== form.accountId) {
       setForm((current) => ({ ...current, accountId: initialAccountId }));
+    } else if (!form.accountId && accounts[0]) {
+      const firstAccount = accounts[0];
+      setForm((current) => ({ ...current, accountId: firstAccount.id }));
     }
-  }, [form.accountId, initialAccountId]);
+  }, [accounts, form.accountId, initialAccountId]);
 
   const account = useMemo(
     () => accounts.find((item) => item.id === form.accountId) ?? null,
@@ -113,7 +118,7 @@ export function TransactionForm({
     return nextErrors;
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
@@ -123,13 +128,19 @@ export function TransactionForm({
 
     setIsSubmitting(true);
     try {
-      createTransaction({
+      await createTransaction({
         accountId: form.accountId,
         type: form.type,
         amount: form.amount,
         description: form.description.trim(),
         referenceId: form.referenceId.trim(),
       });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ledgerQueryKeys.accounts }),
+        queryClient.invalidateQueries({ queryKey: ledgerQueryKeys.transactions }),
+        queryClient.invalidateQueries({ queryKey: ["ledger", "account"] }),
+        queryClient.invalidateQueries({ queryKey: ["ledger", "account-transactions"] }),
+      ]);
       toast.success(`${form.type === "credit" ? "Credit" : "Debit"} recorded successfully.`);
       onSuccess?.();
       setForm(emptyForm(initialAccountId ?? accounts[0]?.id ?? ""));

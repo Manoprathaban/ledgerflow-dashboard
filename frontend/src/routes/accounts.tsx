@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useLedger } from "@/hooks/useLedger";
-import { listAccounts } from "@/services/accountService";
 import { formatDateTime } from "@/utils/date";
 import { formatINR } from "@/utils/money";
 
@@ -25,7 +24,25 @@ function AccountsPage() {
   const { accounts } = useLedger();
   const pageSize = 6;
 
-  const result = useMemo(() => listAccounts({ search, page, pageSize }), [search, page, accounts]);
+  const result = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = accounts.filter(
+      (account) =>
+        !query ||
+        account.name.toLowerCase().includes(query) ||
+        account.id.toLowerCase().includes(query),
+    );
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    return {
+      items: filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+    };
+  }, [search, page, pageSize, accounts]);
 
   return (
     <AppLayout>

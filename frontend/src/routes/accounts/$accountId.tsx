@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { TransactionForm } from "@/components/ledger/TransactionForm";
@@ -16,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLedger } from "@/hooks/useLedger";
 import { getAccountById } from "@/services/accountService";
+import { getTransactionsByAccount } from "@/services/transactionService";
 import { formatDateTime } from "@/utils/date";
 import { formatINR } from "@/utils/money";
 
@@ -28,37 +29,47 @@ export const Route = createFileRoute("/accounts/$accountId")({
 function AccountDetailPage() {
   const { accountId } = Route.useParams();
   const navigate = useNavigate();
-  const { accounts, transactions } = useLedger();
   const [typeFilter, setTypeFilter] = useState<"all" | "credit" | "debit">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const account = accounts.find((item) => item.id === accountId) ?? getAccountById(accountId);
-
   const pageSize = 8;
+  const accountQuery = useQuery({
+    queryKey: ["ledger", "account", accountId],
+    queryFn: () => getAccountById(accountId),
+  });
+  const transactionsQuery = useQuery({
+    queryKey: ["ledger", "account-transactions", accountId, typeFilter, search, page, pageSize],
+    queryFn: () =>
+      getTransactionsByAccount(accountId, {
+        type: typeFilter,
+        ...(search ? { search } : {}),
+        page,
+        pageSize,
+      }),
+  });
+  const account = accountQuery.data;
+  const accountTransactions = transactionsQuery.data?.items ?? [];
+  const totalTransactions = transactionsQuery.data?.total ?? 0;
+  const totalPages = transactionsQuery.data?.totalPages ?? 0;
 
-  const filteredLocal = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const items = transactions.filter(
-      (tx) =>
-        tx.account_id === accountId &&
-        (typeFilter === "all" || tx.type === typeFilter) &&
-        (!q ||
-          tx.id.toLowerCase().includes(q) ||
-          tx.description.toLowerCase().includes(q) ||
-          tx.reference_id.toLowerCase().includes(q)),
+  if (accountQuery.isLoading) {
+    return (
+      <AppLayout>
+        <p className="text-sm text-muted-foreground">Loading account…</p>
+      </AppLayout>
     );
-    return items.sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
-  }, [accountId, search, typeFilter, transactions]);
-
+  }
   if (!account) {
     return (
       <AppLayout>
         <div className="space-y-6">
           <EmptyState
             title="Account not found"
-            description="The requested account ID is not available in the current ledger."
+            description={
+              accountQuery.error instanceof Error
+                ? accountQuery.error.message
+                : "The requested account ID is not available in the ledger."
+            }
             action={
               <Button asChild>
                 <Link to="/accounts">Back to accounts</Link>
@@ -69,8 +80,6 @@ function AccountDetailPage() {
       </AppLayout>
     );
   }
-
-  const accountTransactions = filteredLocal;
 
   return (
     <AppLayout>
@@ -96,10 +105,7 @@ function AccountDetailPage() {
           <MetricCard label="Account ID" value={account.id} />
           <MetricCard label="Current balance" value={formatINR(account.balance)} />
           <MetricCard label="Created" value={formatDateTime(account.created_at)} />
-          <MetricCard
-            label="Transactions"
-            value={String(transactions.filter((tx) => tx.account_id === account.id).length)}
-          />
+          <MetricCard label="Transactions" value={String(totalTransactions)} />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -148,6 +154,13 @@ function AccountDetailPage() {
                 <CardTitle className="text-lg">Transaction history</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {transactionsQuery.isError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {transactionsQuery.error instanceof Error
+                      ? transactionsQuery.error.message
+                      : "Unable to load account transactions."}
+                  </p>
+                ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Select
                     value={typeFilter}
@@ -186,7 +199,7 @@ function AccountDetailPage() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    {accountTransactions.slice(0, pageSize).map((tx) => (
+                    {accountTransactions.map((tx) => (
                       <div key={tx.id} className="rounded-lg border p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
@@ -207,10 +220,10 @@ function AccountDetailPage() {
                   </div>
                 )}
 
-                {accountTransactions.length > pageSize && (
+                {totalPages > 1 && (
                   <div className="flex items-center justify-between border-t pt-3">
                     <span className="text-sm text-muted-foreground">
-                      Page {page} of {Math.ceil(accountTransactions.length / pageSize)}
+                      Page {page} of {totalPages}
                     </span>
                     <div className="flex items-center gap-2">
                       <Button
@@ -224,7 +237,7 @@ function AccountDetailPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={page >= Math.ceil(accountTransactions.length / pageSize)}
+                        disabled={page >= totalPages}
                         onClick={() => setPage((current) => current + 1)}
                       >
                         Next

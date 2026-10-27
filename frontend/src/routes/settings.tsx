@@ -62,8 +62,8 @@ function SettingsPage() {
             </div>
 
             <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Ledger demos are intentionally frontend-only and keep shared data in browser storage
-              for local prototyping.
+              Ledger records are loaded from the connected backend. Display preferences are saved
+              locally in this browser.
             </div>
           </CardContent>
         </Card>

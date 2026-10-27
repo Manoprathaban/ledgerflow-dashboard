@@ -6,15 +6,20 @@ import { searchAccounts } from "@/services/accountService";
 import { searchTransactions } from "@/services/transactionService";
 import { formatINR } from "@/utils/money";
 import { cn } from "@/lib/utils";
+import { useLedger } from "@/hooks/useLedger";
 
 export function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { accounts, transactions } = useLedger();
 
-  const accounts = useMemo(() => searchAccounts(query), [query]);
-  const transactions = useMemo(() => searchTransactions(query), [query]);
-  const hasResults = accounts.length > 0 || transactions.length > 0;
+  const accountResults = useMemo(() => searchAccounts(accounts, query), [accounts, query]);
+  const transactionResults = useMemo(
+    () => searchTransactions(transactions, query),
+    [transactions, query],
+  );
+  const hasResults = accountResults.length > 0 || transactionResults.length > 0;
 
   const close = () => {
     setOpen(false);
@@ -59,7 +64,7 @@ export function GlobalSearch() {
                 <p className="px-4 pb-1 pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Accounts
                 </p>
-                {accounts.map((account) => (
+                {accountResults.map((account) => (
                   <button
                     key={account.id}
                     type="button"
@@ -76,12 +81,12 @@ export function GlobalSearch() {
                 ))}
               </div>
             )}
-            {transactions.length > 0 && (
+            {transactionResults.length > 0 && (
               <div className={cn("border-t border-border py-1.5")}>
                 <p className="px-4 pb-1 pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Transactions
                 </p>
-                {transactions.map((tx) => (
+                {transactionResults.map((tx) => (
                   <button
                     key={tx.id}
                     type="button"

@@ -1,7 +1,5 @@
 import type { Account } from "@/types/account";
-import { LedgerError } from "./errors";
-import { getSnapshot, mutate } from "./ledgerStore";
-import { uuid } from "@/utils/id";
+import { apiRequest } from "./apiClient";
 
 export interface PagedResult<T> {
   items: T[];
@@ -17,70 +15,62 @@ export interface ListAccountsParams {
   pageSize?: number;
 }
 
-function normalizePaging(page?: number, pageSize?: number) {
-  const size = pageSize && pageSize > 0 ? pageSize : 10;
-  return { page: page && page > 0 ? page : 1, pageSize: size };
+interface ApiPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
-function paginate<T>(items: T[], page: number, pageSize: number): PagedResult<T> {
-  const total = items.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
+function fromApiPage<T>(result: ApiPage<T>): PagedResult<T> {
   return {
-    items: items.slice((safePage - 1) * pageSize, safePage * pageSize),
-    total,
-    page: safePage,
-    pageSize,
-    totalPages,
+    items: result.items,
+    total: result.total,
+    page: result.page,
+    pageSize: result.page_size,
+    totalPages: result.total_pages,
   };
 }
 
-/** All accounts, newest first. */
-export function getAllAccounts(): Account[] {
-  return [...getSnapshot().accounts].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+export async function listAccounts(params: ListAccountsParams = {}): Promise<PagedResult<Account>> {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.page !== undefined) query.set("page", String(params.page));
+  if (params.pageSize !== undefined) query.set("page_size", String(params.pageSize));
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return fromApiPage(await apiRequest<ApiPage<Account>>(`/accounts${suffix}`));
+}
+
+export async function getAllAccounts(): Promise<Account[]> {
+  const first = await listAccounts({ page: 1, pageSize: 100 });
+  const remaining = await Promise.all(
+    Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
+      listAccounts({ page: index + 2, pageSize: 100 }),
+    ),
   );
+  return [...first.items, ...remaining.flatMap((page) => page.items)];
 }
 
-export function listAccounts(params: ListAccountsParams = {}): PagedResult<Account> {
-  const { page, pageSize } = normalizePaging(params.page, params.pageSize);
-  const query = (params.search ?? "").trim().toLowerCase();
-  const accounts = getAllAccounts().filter(
-    (account) =>
-      !query ||
-      account.name.toLowerCase().includes(query) ||
-      account.id.toLowerCase().includes(query),
-  );
-  return paginate(accounts, page, pageSize);
+export async function getAccountById(id: string): Promise<Account> {
+  return apiRequest<Account>(`/accounts/${encodeURIComponent(id)}`);
 }
 
-export function getAccountById(id: string): Account | null {
-  return getSnapshot().accounts.find((account) => account.id === id) ?? null;
+export async function createAccount(input: { name: string }): Promise<Account> {
+  return apiRequest<Account>("/accounts", {
+    method: "POST",
+    body: JSON.stringify({ name: input.name.trim() }),
+  });
 }
 
-export function searchAccounts(query: string, limit = 5): Account[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  return getAllAccounts()
-    .filter((a) => a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
+export function searchAccounts(accounts: Account[], query: string, limit = 5): Account[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return [];
+  return accounts
+    .filter(
+      (account) =>
+        account.name.toLowerCase().includes(normalized) ||
+        account.id.toLowerCase().includes(normalized),
+    )
     .slice(0, limit);
-}
-
-/**
- * Create an account. The id, zero balance and timestamp are generated here —
- * never by the UI form.
- */
-export function createAccount(input: { name: string }): Account {
-  const name = (input.name ?? "").trim();
-  if (!name) {
-    throw new LedgerError("INVALID_NAME", "Account holder name is required.");
-  }
-  const account: Account = {
-    id: uuid(),
-    name,
-    balance: "0.00",
-    created_at: new Date().toISOString(),
-  };
-  mutate((data) => ({ ...data, accounts: [account, ...data.accounts] }));
-  return account;
 }

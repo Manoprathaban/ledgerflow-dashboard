@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
@@ -23,6 +24,13 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Backend foundation for the Ledger transaction management system.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 app.include_router(api_router)
