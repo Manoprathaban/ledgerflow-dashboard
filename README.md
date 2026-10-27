@@ -54,8 +54,9 @@ pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
-The API is served under `/api/v1`. See the [API contracts](backend/docs/api-contracts.md)
-for endpoints and request/response formats.
+The API is served under `/api/v1`. See the [API documentation](API_DOCUMENTATION.md)
+for endpoints and request/response formats. See [ASSUMPTIONS.md](ASSUMPTIONS.md)
+for product scope, data ownership, money handling, and deployment assumptions.
 
 Apply the Supabase migrations in `supabase/migrations/` before starting the API.
 The tenant migration keeps pre-existing accounts but leaves their owner unset;

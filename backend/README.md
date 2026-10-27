@@ -81,7 +81,7 @@ pytest
 
 ## Current status
 
-The backend is a FastAPI layered monolith using Psycopg 3 and raw SQL. SQLAlchemy and other ORM packages are not dependencies. The target API, schema, and frontend payload designs are documented in [`docs/api-contracts.md`](docs/api-contracts.md), [`docs/schema-design.md`](docs/schema-design.md), and [`docs/frontend-design.md`](docs/frontend-design.md).
+The backend is a FastAPI layered monolith using Psycopg 3 and raw SQL. SQLAlchemy and other ORM packages are not dependencies. The API contract is documented in [`../API_DOCUMENTATION.md`](../API_DOCUMENTATION.md); the schema and frontend payload designs are documented in [`docs/schema-design.md`](docs/schema-design.md) and [`docs/frontend-design.md`](docs/frontend-design.md).
 
 Account creation, retrieval, balance reads, paginated account search,
 transaction creation, transaction detail, filtered transaction history, and
