@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { NAV_ITEMS } from "./nav-items";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -57,20 +56,6 @@ export function AppSidebar() {
 
       <div className="flex-1 overflow-y-auto px-3 py-2">
         <NavLinks />
-      </div>
-
-      <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
-              AD
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">Administrator</p>
-            <p className="text-xs text-muted-foreground">admin@ledger.app</p>
-          </div>
-        </div>
       </div>
     </aside>
   );

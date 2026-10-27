@@ -70,12 +70,12 @@ pytest
 
 The backend is a FastAPI layered monolith using Psycopg 3 and raw SQL. SQLAlchemy and other ORM packages are not dependencies. The target API, schema, and frontend payload designs are documented in [`docs/api-contracts.md`](docs/api-contracts.md), [`docs/schema-design.md`](docs/schema-design.md), and [`docs/frontend-design.md`](docs/frontend-design.md).
 
-Account creation, retrieval, balance reads, paginated account search, transaction creation, transaction detail, and filtered transaction history are implemented with PostgreSQL persistence. Account-scoped transaction creation locks the account row and commits the immutable transaction and updated balance atomically.
+Account creation, retrieval, balance reads, paginated account search, transaction creation, transaction detail, filtered transaction history, and account-to-account transfers are implemented with PostgreSQL persistence. Account-scoped transactions and transfers lock account rows and commit immutable ledger entries and balance updates atomically. Transfers lock both accounts in UUID order and create one debit and one credit in the same database transaction.
 
 - Transaction amount validation accepts positive decimal strings with up to two fractional digits; descriptions are optional and normalized to an empty string when omitted or blank.
 - The API allows browser cross-origin requests; the backend currently has no user authentication, so configure authentication and restrict allowed origins before exposing sensitive or user-specific data.
 - [`sql/schema.sql`](sql/schema.sql) is a local bootstrap snapshot; Supabase migration history is authoritative for remote deployments.
-- The frontend still uses browser-persisted mock services; there is no HTTP client or live API integration.
+- The frontend calls the Render API for accounts, transactions, and money transfers.
 - API tests cover success/error response shapes and validation. A PostgreSQL-backed smoke flow has been run against a temporary database, but PostgreSQL integration tests are not yet part of the automated suite. Add automated concurrency tests for simultaneous debits and transaction rollback invariants before production use.
 
 Before calling the backend complete, add PostgreSQL-backed tests for account and transaction flows, especially concurrent debits that must not overdraw, duplicate-reference rollback without balance changes, transaction immutability, and list filters/pagination.
@@ -92,4 +92,4 @@ Production deployments are intentionally disabled until repository settings and 
 - Configure Vercel secrets `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_TOKEN`; set `VERCEL_DEPLOY_ENABLED=true` only after Vercel project/build configuration is verified. Manual dispatch supports an explicit frontend deploy.
 - Production jobs require a successful database migration job first. Never expose the Supabase database password, access token, or Vercel token to client-side builds.
 
-GitHub Actions must be enabled in the repository's Actions settings. No production deploy variables or credentials are committed in this repository. The frontend still uses mock data; deployments remain opt-in until frontend integration and production configuration are ready.
+GitHub Actions must be enabled in the repository's Actions settings. No production deploy variables or credentials are committed in this repository. Production deployment jobs remain opt-in until repository deployment settings and credentials are configured.

@@ -86,6 +86,7 @@ The app includes:
 - Dashboard summaries and recent activity
 - Account creation and account detail views
 - Credit and debit transactions
+- Atomic transfers between accounts
 - Validation for duplicate references and insufficient funds
 - Search, filters, sorting, and pagination
 - Ledger data loaded from the connected Render API

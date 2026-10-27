@@ -1,6 +1,6 @@
 # API contracts
 
-This document defines the contract for the Ledger backend. It is the source of truth for the request payloads, response shapes, validation rules, and error semantics before backend implementation begins.
+This document defines the Ledger backend request payloads, response shapes, validation rules, and error semantics.
 
 Related design docs:
 - [schema-design.md](./schema-design.md)
@@ -191,6 +191,33 @@ Return the current net balance for a single account.
 ```
 
 ## Transactions
+
+### `POST /api/v1/transfers`
+
+Transfer funds between two accounts. The source debit, destination credit, and
+both account balance updates run in one database transaction. If either account
+is missing, funds are insufficient, or any database operation fails, none of
+the transfer is committed.
+
+#### Request
+
+```json
+{
+  "source_account_id": "5e9f8eb4-9831-4d0a-b9b0-9ff5f41d6722",
+  "destination_account_id": "47d65b2d-e0c1-4a43-92a5-b79da56f4c10",
+  "amount": "30.00",
+  "description": "Monthly savings"
+}
+```
+
+The source and destination must be different existing accounts. The amount is
+a positive decimal string with at most two fractional digits. The service locks
+both account rows in a consistent order to prevent overdrafts and deadlocks.
+
+#### Success response: `201 Created`
+
+The response contains the transfer identifier, both immutable ledger entries
+(one debit and one credit), and the resulting balance for each account.
 
 ### `POST /api/v1/accounts/{account_id}/transactions`
 

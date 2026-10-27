@@ -1,4 +1,4 @@
-import { ArrowLeftRight, LayoutDashboard, Settings, Users } from "lucide-react";
+import { ArrowLeftRight, ArrowRightLeft, LayoutDashboard, Settings, Users } from "lucide-react";
 
 export interface NavItem {
   title: string;
@@ -12,5 +12,6 @@ export const NAV_ITEMS: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
   { title: "Accounts", url: "/accounts", icon: Users },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
+  { title: "Money transfer", url: "/transfers", icon: ArrowRightLeft },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

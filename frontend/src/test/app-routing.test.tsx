@@ -30,4 +30,12 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches the money transfer route instead of falling back to not found", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/transfers");
+
+    expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
+  });
 });

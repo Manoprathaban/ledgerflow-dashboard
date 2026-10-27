@@ -33,6 +33,7 @@ function pageTitle(pathname: string): string {
   if (pathname === "/accounts") return "Accounts";
   if (pathname.startsWith("/accounts/")) return "Account Details";
   if (pathname === "/transactions") return "Transactions";
+  if (pathname === "/transfers") return "Money Transfer";
   if (pathname === "/settings") return "Settings";
   return "Ledger";
 }
